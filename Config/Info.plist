@@ -36,17 +36,5 @@
 	<string>© MoveCam</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
-	<key>SUFeedURL</key>
-	<string>https://github.com/2819-dev/MoveCam/releases/latest/download/appcast.xml</string>
-	<key>SUPublicEDKey</key>
-	<string>$(SPARKLE_PUBLIC_KEY)</string>
-	<key>SUEnableAutomaticChecks</key>
-	<true/>
-	<key>SUAutomaticallyUpdate</key>
-	<true/>
-	<key>SUAllowsAutomaticUpdates</key>
-	<true/>
-	<key>SUScheduledCheckInterval</key>
-	<integer>21600</integer>
 </dict>
 </plist>

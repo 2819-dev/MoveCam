@@ -58,46 +58,20 @@ Grants are stored in [`entitlements.json`](entitlements.json) on `main`. Players
 
 ## Updates
 
-MoveCam updates itself with [Sparkle](https://sparkle-project.org):
+MoveCam updates itself from GitHub Releases. There are no keys or accounts to set up.
 
-- **Minor and patch releases** (for example 1.2.0 → 1.3.0 or 1.3.1) download quietly in the background and apply the next time MoveCam opens. The player doesn't need to do anything.
-- **Major releases** (for example 1.x → 2.0.0) ask the player before installing.
-- Players can turn automatic installs off or check manually in **Settings → Updates** or **MoveCam → Check for Updates…**.
+- **Small updates** download quietly in the background and install when MoveCam quits, so the next launch is already updated.
+- **Big updates** (a new major version, like 1.x → 2.0) ask the player first.
+- Players can turn automatic installs off, or check by hand, in **Settings → Updates** or **MoveCam → Check for Updates…**.
+- Updates only work once MoveCam is in the **Applications** folder.
 
 ## Publishing a release
 
-Releases are built by GitHub Actions on a Mac runner ([`.github/workflows/release.yml`](.github/workflows/release.yml)):
+Nothing to configure. **Every push to `main` builds MoveCam on a Mac runner and publishes a new release** with `MoveCam.dmg`. You can also run the **Release** workflow by hand from the Actions tab.
 
-```bash
-git tag v1.0.0
-git push origin v1.0.0
-```
+Versions are automatic: the [`VERSION`](VERSION) file plus a build number, e.g. `1.0.17`. To ship a big update that asks players before installing, change `VERSION` to `2.0`.
 
-(Or run the **Release** workflow from the Actions tab and type a version.) The workflow builds the app and attaches `MoveCam.dmg`, a versioned `.dmg`, the `.zip` Sparkle uses, and `appcast.xml` to the GitHub release. The app reads its update feed from `releases/latest/download/appcast.xml`.
-
-Version numbers decide how players receive the update: **bump the major version only when you want players to be asked first.**
-
-### One-time setup: update signing keys
-
-Sparkle only installs updates signed with your private key. Do this once, on any Mac:
-
-```bash
-curl -LO https://github.com/sparkle-project/Sparkle/releases/download/2.6.4/Sparkle-2.6.4.tar.xz
-mkdir sparkle && tar -xf Sparkle-2.6.4.tar.xz -C sparkle
-./sparkle/bin/generate_keys            # prints your PUBLIC key
-./sparkle/bin/generate_keys -x private.key   # exports the PRIVATE key
-```
-
-Then, in the repo's **Settings → Secrets and variables → Actions**:
-
-- **Variables** tab: add `SPARKLE_PUBLIC_KEY` = the public key that was printed.
-- **Secrets** tab: add `SPARKLE_PRIVATE_KEY` = the contents of `private.key`. Then delete the file, and keep a backup somewhere safe. If you lose this key, existing installs can't update.
-
-Without these, releases still build, but they won't auto-update. In that case the app's Settings show "development build".
-
-### Optional: Apple Developer ID
-
-Builds are ad-hoc signed, which is why players have to approve MoveCam the first time they open it. If you later join the Apple Developer Program, sign with your Developer ID, turn on the hardened runtime (`ENABLE_HARDENED_RUNTIME=YES`; the camera entitlement is already in `Config/MoveCam.entitlements`), and notarize in the release workflow. That removes the warning.
+The download link always points at the newest build: `https://github.com/2819-dev/MoveCam/releases/latest/download/MoveCam.dmg`
 
 ## Development
 
@@ -116,6 +90,6 @@ The Xcode project is generated from [`project.yml`](project.yml) and isn't commi
 | `MoveCam/Views` | Menu, live view with outline, HUD, pause and game-over screens, Settings |
 | `MoveCam/Games` | The five games plus shared 3D/2D art helpers (all art is procedurally generated) |
 | `MoveCam/Account`, `MoveCam/Moderator` | MoveCam IDs, Pro entitlements, moderator panel |
-| `MoveCam/Updates` | Sparkle integration |
+| `MoveCam/Updates` | Self-updater that installs new releases from GitHub |
 
 `MoveCam --render-previews <dir>` plays each game briefly with a simulated player and saves screenshots. CI runs this and uploads them as the `game-previews` artifact.

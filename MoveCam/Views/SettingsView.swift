@@ -88,10 +88,15 @@ private struct UpdateSettings: View {
                 Toggle("Install updates automatically", isOn: $updater.automaticallyUpdates)
                 Text("Small updates download quietly in the background and apply the next time MoveCam opens. Big (major) updates always ask first.")
                     .font(.caption).foregroundStyle(.secondary)
-                Button("Check for Updates…") { updater.checkForUpdates() }
-                    .disabled(!updater.canCheckForUpdates)
+                HStack {
+                    Button("Check for Updates…") { updater.checkForUpdates() }
+                        .disabled(!updater.canCheckForUpdates)
+                    if let status = updater.status {
+                        Text(status).font(.caption).foregroundStyle(.secondary)
+                    }
+                }
             } else {
-                Text("This is a development build, so automatic updates are off. Download official builds from GitHub Releases.")
+                Text("Move MoveCam into your Applications folder to turn on automatic updates.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Link("Open GitHub Releases", destination: AppConfig.releasesURL)
