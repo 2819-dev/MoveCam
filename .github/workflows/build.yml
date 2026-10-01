@@ -69,7 +69,7 @@ jobs:
         run: |
           # Install this build (version 1.0.0) somewhere writable, let it update itself,
           # and check the app on disk becomes the latest GitHub release.
-          LATEST=$(curl -s https://api.github.com/repos/${{ github.repository }}/releases/latest | python3 -c 'import sys,json; print(json.load(sys.stdin).get("tag_name","").lstrip("v"))')
+          LATEST=$(curl -s -H "Authorization: Bearer ${{ github.token }}" https://api.github.com/repos/${{ github.repository }}/releases/latest | python3 -c 'import sys,json; print(json.load(sys.stdin).get("tag_name","").lstrip("v"))')
           if [ -z "$LATEST" ]; then echo "No release yet; skipping"; exit 0; fi
           APPS="$RUNNER_TEMP/Apps"; mkdir -p "$APPS"
           cp -R build/Build/Products/Release/MoveCam.app "$APPS/"

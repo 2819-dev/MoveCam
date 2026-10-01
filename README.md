@@ -19,17 +19,20 @@ Requires macOS 14 (Sonoma) or later. Runs on Apple Silicon and Intel.
 
 ## How to play
 
-Stand back until the outline turns green. The camera should see you from your head down past your hips (about 2 m / 6 ft from a laptop).
+Stand back until the outline turns green. The camera should see you from your head down past your hips (about 2 m / 6 ft from a laptop). Wherever you're standing when a game starts becomes "center", so you don't have to line up perfectly.
 
 | Gesture | Menu | In a game | Paused | Game over |
 |---|---|---|---|---|
-| 👍 **Thumbs up** (hold briefly) | Play selected game | | Resume | Play again |
+| ✋ **Raise one hand** above your head, or 👍 **thumbs up** (hold briefly) | Play selected game | | Resume | Play again |
 | 🙌 **Both hands above your head** (hold) | | Pause | Back to main menu | Back to main menu |
-| 🚶 **Step left / right** | Browse games | Move / steer | | |
+| 🚶 **Step left / right** (about half a step) | Browse games | Change lane / steer | | |
+| ⬆️ **Jump** · ⬇️ **Squat** | | Jump · crouch / tuck | | |
 
 A ring in the live view fills up while you hold a gesture. If you walk out of view mid-game, MoveCam pauses automatically.
 
-**Keyboard** (handy for testing): ← → browse / move, **Space** = thumbs up (jump in-game), **↑** jump, **↓** crouch, **Esc** = hands up.
+**Keyboard** (handy for testing): ← → browse / move, **Space** = confirm (jump in-game), **↑** jump, **↓** crouch, **Esc** = back / pause.
+
+**Tips for reliable tracking:** a bright room, light in front of you rather than behind you, and nothing else moving in the frame.
 
 ### Games
 
