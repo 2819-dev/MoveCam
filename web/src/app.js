@@ -80,7 +80,12 @@ const canvas = document.createElement("canvas");
 canvas.id = "stage";
 root.append(canvas);
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+// Pixel ratio steps down while the frame rate is low, so camera tracking keeps
+// its share of the machine. Retina screens start a notch below full resolution.
+const PIXEL_STEPS = [2, 1.5, 1.25, 1];
+let pixelStep = PIXEL_STEPS.findIndex((r) => r <= Math.min(window.devicePixelRatio, 1.5));
+if (pixelStep < 0) pixelStep = PIXEL_STEPS.length - 1;
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, PIXEL_STEPS[pixelStep]));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -576,7 +581,7 @@ window.addEventListener("resize", resize);
 resize();
 
 let last = performance.now();
-let frames = 0, fpsSince = performance.now(), lowered = false;
+let frames = 0, fpsSince = performance.now();
 renderer.setAnimationLoop(() => {
   const now = performance.now();
   const dt = Math.min((now - last) / 1000, 1 / 20);
@@ -590,12 +595,12 @@ renderer.setAnimationLoop(() => {
       game.idle(dt);
     }
     renderer.render(game.scene, game.camera);
-    // Adaptive quality: drop resolution once if the device struggles.
+    // Adaptive quality: drop resolution a step at a time while the device struggles.
     frames++;
-    if (!lowered && now - fpsSince > 4000) {
-      if (frames / ((now - fpsSince) / 1000) < 42) {
-        lowered = true;
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.25));
+    if (now - fpsSince > 3000) {
+      if (frames / ((now - fpsSince) / 1000) < 50 && pixelStep < PIXEL_STEPS.length - 1) {
+        pixelStep++;
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, PIXEL_STEPS[pixelStep]));
         resize();
       }
       frames = 0; fpsSince = now;

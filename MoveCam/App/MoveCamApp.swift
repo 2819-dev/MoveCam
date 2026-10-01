@@ -54,6 +54,7 @@ struct MoveCamApp: App {
         Settings {
             SettingsView()
                 .environmentObject(camera)
+                .environmentObject(hub)
                 .environmentObject(entitlements)
                 .environmentObject(updater)
         }

@@ -16,6 +16,7 @@ struct SettingsView: View {
 
 private struct GeneralSettings: View {
     @EnvironmentObject var camera: CameraManager
+    @EnvironmentObject var hub: MotionHub
     @AppStorage("showSkeleton") private var showSkeleton = true
 
     var body: some View {
@@ -28,6 +29,18 @@ private struct GeneralSettings: View {
             Text("Plug in a USB webcam or use your iPhone as a Continuity Camera — it shows up here.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+            LabeledContent("Tracking speed") {
+                if hub.speed.fps > 0 {
+                    Text("\(Int(hub.speed.fps.rounded())) fps · \(Int(hub.speed.trackingMs.rounded())) ms per frame")
+                        .foregroundStyle(hub.speed.fps < 20 ? Theme.bad : .secondary)
+                } else {
+                    Text("Camera off").foregroundStyle(.secondary)
+                }
+            }
+            if hub.speed.fps > 0 && hub.speed.fps < 20 {
+                Text("Your camera is running slowly. Turn on more lights or face a window, and close other apps using the camera.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             Text("Music and sound effects are in the in-game settings (gear button in the menu).")
                 .font(.caption).foregroundStyle(.secondary)
             Toggle("Show body tracking skeleton in the live view", isOn: $showSkeleton)

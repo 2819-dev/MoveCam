@@ -8,6 +8,8 @@ import QuartzCore
 final class MotionHub: ObservableObject {
     /// Main-thread copy for SwiftUI (live view outline, gesture rings).
     @Published private(set) var snapshot = MotionSnapshot.empty
+    /// Camera frames per second and how long tracking takes per frame, updated every second.
+    @Published private(set) var speed = TrackingSpeed()
     /// Gestures, delivered on the main thread.
     let events = PassthroughSubject<GestureEvent, Never>()
 
@@ -20,6 +22,9 @@ final class MotionHub: ObservableObject {
     private var pendingReset = false
     private var pendingCalibration = false
     private var lastThumbsUp = false
+    private var speedFrames = 0
+    private var speedWork: TimeInterval = 0
+    private var speedSince = CACurrentMediaTime()
     /// Screenshot mode only.
     var simulateHands = false
     /// Raw pose for the web game as JSON, called on the video queue for every frame.
@@ -93,9 +98,17 @@ final class MotionHub: ObservableObject {
         }
         lock.unlock()
 
+        let started = CACurrentMediaTime()
         let result = detector.detect(pixelBuffer: pixelBuffer, detectHands: wantHands)
         lastThumbsUp = result.thumbsUp
         let now = CACurrentMediaTime()
+        speedFrames += 1
+        speedWork += now - started
+        var newSpeed: TrackingSpeed?
+        if now - speedSince >= 1 {
+            newSpeed = TrackingSpeed(fps: Double(speedFrames) / (now - speedSince), trackingMs: speedWork / Double(speedFrames) * 1000)
+            speedFrames = 0; speedWork = 0; speedSince = now
+        }
         if let onFrame { onFrame(Self.frameJSON(result.pose, thumbsUp: lastThumbsUp, time: now)) }
         var (snap, events) = interpreter.process(pose: result.pose, thumbsUp: lastThumbsUp && result.pose != nil, time: now)
 
@@ -105,6 +118,7 @@ final class MotionHub: ObservableObject {
         lock.unlock()
 
         DispatchQueue.main.async {
+            if let newSpeed { self.speed = newSpeed }
             self.snapshot = snap
             for event in events { self.events.send(event) }
         }
@@ -150,4 +164,9 @@ final class MotionHub: ObservableObject {
         if now < kbCrouchUntil { snap.isCrouching = true }
         if now < kbAirborneUntil { snap.isAirborne = true }
     }
+}
+
+struct TrackingSpeed: Equatable {
+    var fps: Double = 0
+    var trackingMs: Double = 0
 }

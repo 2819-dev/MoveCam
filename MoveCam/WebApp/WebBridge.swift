@@ -68,19 +68,23 @@ final class WebBridge: NSObject, ObservableObject, WKScriptMessageHandler, WKNav
 
     // MARK: - Native → JS
 
-    /// Poses arrive ~30 times a second; only the newest frame is delivered.
+    /// Poses arrive 30-60 times a second. Only one is in flight at a time and
+    /// the game always gets the newest, so a busy frame never leaves it
+    /// working through a backlog of old poses.
     private func enqueue(_ json: String) {
         guard isReady else { return }
         pendingFrame = json
-        guard !frameScheduled else { return }
+        sendPendingFrame()
+    }
+
+    private func sendPendingFrame() {
+        guard !frameScheduled, let frame = pendingFrame else { return }
+        pendingFrame = nil
         frameScheduled = true
-        DispatchQueue.main.async { [weak self] in
+        webView.evaluateJavaScript("MoveCamNative.pushPose(\(frame))") { [weak self] _, _ in
             guard let self else { return }
             self.frameScheduled = false
-            if let frame = self.pendingFrame {
-                self.pendingFrame = nil
-                self.webView.evaluateJavaScript("MoveCamNative.pushPose(\(frame))", completionHandler: nil)
-            }
+            self.sendPendingFrame()
         }
     }
 
