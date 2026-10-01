@@ -75,7 +75,7 @@ final class PenaltySaveGame: SceneGame {
             scene.rootNode.addChildNode(glove)
             gloves.append(glove)
         }
-        hud.set { $0.lives = 5; $0.maxLives = 5; $0.stat = "🧤 0 saves" }
+        hud.set { $0.lives = 5; $0.maxLives = 5; $0.stat = "Saves 0" }
     }
 
     // MARK: - World
@@ -387,8 +387,8 @@ final class PenaltySaveGame: SceneGame {
         scene.rootNode.addChildNode(burst)
         burst.runAction(.sequence([.wait(duration: 1.5), .removeFromParentNode()]))
         let score = self.score, saves = self.saves, streak = self.streak
-        hud.set { $0.score = score; $0.stat = "🧤 \(saves) saves" }
-        hud.flash(streak >= 3 ? "SAVE! 🔥 ×\(streak)" : "SAVE! 🧤", duration: 1.0)
+        hud.set { $0.score = score; $0.stat = "Saves \(saves)" }
+        hud.flash(streak >= 3 ? "Save!  \(streak) in a row" : "Save!", duration: 1.0)
     }
 
     private func goal() {
@@ -402,6 +402,6 @@ final class PenaltySaveGame: SceneGame {
         sound.play(.groan, volume: 0.8)
         let lives = self.lives
         hud.set { $0.lives = max(0, lives) }
-        hud.flash(lives > 0 ? "Goal… ⚽️" : "Full time!", duration: 1.2)
+        hud.flash(lives > 0 ? "Goal" : "Full time!", duration: 1.2)
     }
 }

@@ -1,9 +1,11 @@
 import AppKit
 import SceneKit
 import SpriteKit
+import SwiftUI
 
-/// `MoveCam --render-previews <dir>` plays each game for a few seconds with a
-/// simulated player and saves screenshots. Used by CI to sanity-check visuals.
+/// `MoveCam --render-previews <dir>` saves screenshots of the menu, each game
+/// (with a simulated player) and the pause / game-over screens. CI uses it to
+/// check visuals, and the game shots double as menu card art.
 @MainActor
 enum PreviewRenderer {
     static var outputDirectory: URL? {
@@ -12,19 +14,31 @@ enum PreviewRenderer {
         return URL(fileURLWithPath: args[i + 1])
     }
 
-    static func run(into dir: URL) {
+    static func run(into dir: URL, app: AppState, mainView: @escaping () -> NSView?) {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let hub = MotionHub()
+        hub.simulateHands = true
         var remaining = GameInfo.all
         var window: NSWindow?
         var game: GameSession?
+        var shots: [GameID: CGImage] = [:]
+
+        func finishUp() {
+            if let background = shots[.canyonRun] {
+                saveSwiftUI(PauseOverlay().environmentObject(app), background: background, to: dir.appendingPathComponent("screen-pause.png"))
+            }
+            if let background = shots[.fruitFrenzy] {
+                let result = GameResult(score: 1240, detail: "48 fruit sliced")
+                saveSwiftUI(GameOverOverlay(result: result, isBest: true).environmentObject(app), background: background,
+                            to: dir.appendingPathComponent("screen-gameover.png"))
+            }
+            NSApp.terminate(nil)
+        }
 
         func next() {
             game?.stop()
-            guard !remaining.isEmpty else {
-                NSApp.terminate(nil)
-                return
-            }
+            window?.orderOut(nil)
+            guard !remaining.isEmpty else { finishUp(); return }
             let info = remaining.removeFirst()
             let session = info.make(hub)
             let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1280, height: 720), styleMask: [.titled], backing: .buffered, defer: false)
@@ -34,27 +48,48 @@ enum PreviewRenderer {
             game = session
             session.start()
             hub.keyboardStep(1)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { hub.keyboardJump() }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) {
-                save(session, to: dir.appendingPathComponent("\(info.id.rawValue).png"))
-                window?.orderOut(nil)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 4.6) { hub.keyboardJump() }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 6.0) {
+                if let image = capture(session) {
+                    shots[info.id] = image
+                    write(image, to: dir.appendingPathComponent("\(info.id.rawValue).png"))
+                }
                 next()
             }
         }
-        next()
+
+        // The menu as it first appears.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            if let view = mainView(), let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
+                view.cacheDisplay(in: view.bounds, to: rep)
+                try? rep.representation(using: .png, properties: [:])?.write(to: dir.appendingPathComponent("screen-menu.png"))
+            }
+            next()
+        }
     }
 
-    private static func save(_ session: GameSession, to url: URL) {
-        var cgImage: CGImage?
+    private static func capture(_ session: GameSession) -> CGImage? {
         if let scnView = session.contentView as? SCNView {
-            cgImage = Art.cgImage(scnView.snapshot())
+            return Art.cgImage(scnView.snapshot())
         } else if let skView = session.contentView as? SKView, let scene = skView.scene {
-            print("[preview] \(url.lastPathComponent): scene \(scene.size), \(scene.children.count) children:",
-                  scene.children.map { "\(type(of: $0))@\(Int($0.position.x)),\(Int($0.position.y)) z\(Int($0.zPosition)) a\($0.alpha) s\($0.xScale) hidden:\($0.isHidden)" })
-            cgImage = skView.texture(from: scene)?.cgImage()
+            return skView.texture(from: scene)?.cgImage()
         }
-        guard let cgImage else { return }
-        let rep = NSBitmapImageRep(cgImage: cgImage)
-        try? rep.representation(using: .png, properties: [:])?.write(to: url)
+        return nil
+    }
+
+    private static func write(_ image: CGImage, to url: URL) {
+        try? NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])?.write(to: url)
+    }
+
+    private static func saveSwiftUI<V: View>(_ overlay: V, background: CGImage, to url: URL) {
+        let view = ZStack {
+            Image(decorative: background, scale: 1).resizable()
+            overlay
+        }
+        .frame(width: 1280, height: 720)
+        .preferredColorScheme(.dark)
+        let renderer = ImageRenderer(content: view)
+        renderer.scale = 1
+        if let image = renderer.cgImage { write(image, to: url) }
     }
 }

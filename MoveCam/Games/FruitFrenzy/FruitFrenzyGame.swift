@@ -65,7 +65,7 @@ final class FruitFrenzyGame: SpriteGame {
             blade.cursor.isHidden = true
         }
         layoutScene()
-        hud.set { $0.lives = 3; $0.maxLives = 3; $0.stat = "🍉 0" }
+        hud.set { $0.lives = 3; $0.maxLives = 3; $0.stat = "Sliced 0" }
     }
 
     override func layoutScene() {
@@ -113,7 +113,7 @@ final class FruitFrenzyGame: SpriteGame {
                     let bonus = comboCount * 5
                     addScore(bonus)
                     sound.play(.combo)
-                    hud.flash("Combo ×\(comboCount)! +\(bonus)")
+                    hud.flash("\(comboCount)-fruit combo  +\(bonus)")
                 }
                 comboCount = 0
             }
@@ -232,7 +232,7 @@ final class FruitFrenzyGame: SpriteGame {
         sound.play(.slice, volume: 0.8)
         sound.play(.splat, volume: 0.5)
         let sliced = self.sliced
-        hud.set { $0.stat = "🍉 \(sliced)" }
+        hud.set { $0.stat = "Sliced \(sliced)" }
 
         // Two halves fly apart along the cut.
         let halfTexture = SKTexture(image: FruitArt.half(kind))
@@ -289,7 +289,7 @@ final class FruitFrenzyGame: SpriteGame {
         effectLayer.addChild(fire)
         fire.run(.sequence([.wait(forDuration: 1.5), .removeFromParent()]))
         shake()
-        loseLife("Boom! 💣")
+        loseLife("Bomb!")
     }
 
     private func missed() {

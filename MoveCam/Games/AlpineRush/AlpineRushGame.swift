@@ -111,7 +111,7 @@ final class AlpineRushGame: SceneGame {
         sprayNode.addParticleSystem(spray)
         player.addChildNode(sprayNode)
 
-        hud.set { $0.lives = 3; $0.maxLives = 3; $0.stat = "🚩 0 gates" }
+        hud.set { $0.lives = 3; $0.maxLives = 3; $0.stat = "Gates 0" }
     }
 
     private func addSkiGear() {
@@ -271,7 +271,7 @@ final class AlpineRushGame: SceneGame {
             if playerY == 0 {
                 velocityY = 0
                 bonus += 25
-                hud.flash("Big air! +25", duration: 0.7)
+                hud.flash("Big air  +25", duration: 0.7)
             }
         }
 
@@ -335,13 +335,13 @@ final class AlpineRushGame: SceneGame {
                 gates += 1
                 sound.play(.gate, volume: 0.7)
                 let gates = self.gates
-                hud.set { $0.stat = "🚩 \(gates) gates" }
-                hud.flash("Gate! +50", duration: 0.6)
+                hud.set { $0.stat = "Gates \(gates)" }
+                hud.flash("Gate  +50", duration: 0.6)
             } else {
                 hud.flash("Missed the gate", duration: 0.7)
             }
         case .tree:
-            if dx < 0.9 { crash("Timber! 🌲") }
+            if dx < 0.9 { crash("Hit a tree") }
         case .rock:
             if dx < 1.0, playerY < 0.35 { crash("Rock! Jump next time") }
         }

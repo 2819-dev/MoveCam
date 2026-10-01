@@ -18,10 +18,11 @@ struct RootView: View {
         .overlay(alignment: .bottom) {
             if let toast = app.toast {
                 Text(toast)
-                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .font(Theme.body(14, .semibold))
                     .foregroundStyle(.white)
-                    .padding(.horizontal, 20).padding(.vertical, 12)
-                    .background(.black.opacity(0.75), in: Capsule())
+                    .padding(.horizontal, 16)
+                    .frame(height: 38)
+                    .background(Theme.raised, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
                     .padding(.bottom, 30)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
@@ -29,7 +30,7 @@ struct RootView: View {
         .animation(.easeInOut(duration: 0.3), value: app.screen)
         .animation(.easeInOut(duration: 0.3), value: app.toast)
         .frame(minWidth: 1100, minHeight: 720)
-        .background(Color.black)
+        .background(Theme.background)
         .background(WindowAccessor { window in
             app.mainWindow = window
             window.title = "MoveCam"
@@ -39,7 +40,7 @@ struct RootView: View {
         .preferredColorScheme(.dark)
         .onAppear {
             if let dir = PreviewRenderer.outputDirectory {
-                PreviewRenderer.run(into: dir)
+                PreviewRenderer.run(into: dir, app: app, mainView: { app.mainWindow?.contentView })
             } else {
                 camera.start()
             }

@@ -45,7 +45,7 @@ final class BoxingBlitzGame: SpriteGame {
             addChild(glove.sprite)
         }
         layoutScene()
-        hud.set { $0.timeRemaining = Int(self.roundLength); $0.lives = nil; $0.stat = "Combo ×0" }
+        hud.set { $0.timeRemaining = Int(self.roundLength); $0.lives = nil; $0.stat = "Combo 0" }
     }
 
     override func layoutScene() {
@@ -105,7 +105,7 @@ final class BoxingBlitzGame: SpriteGame {
             }
             if pad.age >= pad.life {
                 combo = 0
-                hud.set { $0.stat = "Combo ×0" }
+                hud.set { $0.stat = "Combo 0" }
                 pad.run(.sequence([.group([.fadeOut(withDuration: 0.2), .scale(to: 0.5, duration: 0.2)]), .removeFromParent()]))
                 pads.remove(at: i)
                 continue
@@ -151,10 +151,10 @@ final class BoxingBlitzGame: SpriteGame {
         sound.play(.punch)
         if combo > 0 && combo % 10 == 0 {
             sound.play(.combo)
-            hud.flash("\(combo) hit combo! 🔥")
+            hud.flash("\(combo)-hit combo")
         }
         let score = self.score, combo = self.combo
-        hud.set { $0.score = score; $0.stat = "Combo ×\(combo)" }
+        hud.set { $0.score = score; $0.stat = "Combo \(combo)" }
 
         let pow = SKLabelNode(text: multiplier > 1 ? "+\(points) ×\(multiplier)" : "+\(points)")
         pow.fontName = "AvenirNext-Heavy"
@@ -198,7 +198,7 @@ final class BoxingBlitzGame: SpriteGame {
             if bagTimer <= 0 {
                 bagStage = 1
                 bagTime = 0
-                hud.flash("DUCK! ⬇️", duration: 1.1)
+                hud.flash("Duck!", duration: 1.1)
                 sound.play(.whistle, volume: 0.4)
                 let node = SKNode()
                 let bagSprite = SKSpriteNode(texture: SKTexture(image: Self.bagImage))
@@ -228,14 +228,14 @@ final class BoxingBlitzGame: SpriteGame {
                     score += 150
                     let score = self.score
                     hud.set { $0.score = score }
-                    hud.flash("Nice duck! +150", duration: 0.9)
+                    hud.flash("Nice duck  +150", duration: 0.9)
                     sound.play(.whoosh)
                 } else {
                     combo = 0
                     score = max(0, score - 100)
                     let score = self.score
-                    hud.set { $0.score = score; $0.stat = "Combo ×0" }
-                    hud.flash("Bonk! −100", duration: 0.9)
+                    hud.set { $0.score = score; $0.stat = "Combo 0" }
+                    hud.flash("Hit by the bag  −100", duration: 0.9)
                     sound.play(.hit)
                 }
             }

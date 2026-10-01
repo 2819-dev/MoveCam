@@ -20,6 +20,8 @@ final class MotionHub: ObservableObject {
     private var pendingReset = false
     private var frameIndex = 0
     private var lastThumbsUp = false
+    /// Screenshot mode only.
+    var simulateHands = false
 
     // Keyboard simulation (handy for testing without moving around).
     private var kbBodyX: CGFloat?
@@ -33,7 +35,13 @@ final class MotionHub: ObservableObject {
     var latest: MotionSnapshot {
         lock.lock(); defer { lock.unlock() }
         var snap = _latest
-        applyKeyboard(&snap, now: CACurrentMediaTime())
+        let now = CACurrentMediaTime()
+        applyKeyboard(&snap, now: now)
+        if simulateHands {
+            // Screenshot mode: wave both hands around so gloves and blades are visible.
+            snap.leftHand = HandPoint(x: -0.55 + 0.25 * CGFloat(sin(now * 2.1)), y: 0.62 + 0.2 * CGFloat(cos(now * 1.7)))
+            snap.rightHand = HandPoint(x: 0.5 + 0.3 * CGFloat(cos(now * 2.6)), y: 0.55 + 0.25 * CGFloat(sin(now * 3.1)))
+        }
         return snap
     }
 

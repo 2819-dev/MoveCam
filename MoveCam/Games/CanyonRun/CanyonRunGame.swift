@@ -107,7 +107,7 @@ final class CanyonRunGame: SceneGame {
         addCoinLine(lane: 1, z: -30, count: 5)
         for z in [CGFloat(-60), -95, -128] { spawnRow(at: z) }
 
-        hud.set { $0.lives = 3; $0.maxLives = 3; $0.stat = "🪙 0" }
+        hud.set { $0.lives = 3; $0.maxLives = 3; $0.stat = "Coins 0" }
     }
 
     private func buildTiles() {
@@ -398,7 +398,7 @@ final class CanyonRunGame: SceneGame {
         case .bridge: message = "Crouch!"
         default: message = "Step aside!"
         }
-        hud.flash(lives > 0 ? "Ouch! \(message)" : "Wipeout!")
+        hud.flash(lives > 0 ? "Ouch — \(message.lowercased())" : "Wipeout!")
         if lives <= 0 {
             finish(score: Int(distance) + coins * 10, detail: "\(Int(distance)) m · \(coins) coins")
         }
@@ -406,9 +406,9 @@ final class CanyonRunGame: SceneGame {
 
     private func hint(for thing: Thing) {
         switch thing.kind {
-        case .hurdle where thing.lanes.count == 3: hud.flash("Jump! 🦘", duration: 0.8)
-        case .bridge: hud.flash("Crouch down! ⬇️", duration: 0.8)
-        case .boulder: hud.flash("Step to a free lane! ↔️", duration: 0.8)
+        case .hurdle where thing.lanes.count == 3: hud.flash("Jump!", duration: 0.8)
+        case .bridge: hud.flash("Crouch!", duration: 0.8)
+        case .boulder: hud.flash("Change lanes!", duration: 0.8)
         default: break
         }
     }
@@ -417,7 +417,7 @@ final class CanyonRunGame: SceneGame {
         coins += 1
         sound.play(.coin, volume: 0.6)
         let coins = self.coins
-        hud.set { $0.stat = "🪙 \(coins)" }
+        hud.set { $0.stat = "Coins \(coins)" }
         let sparkle = SCNNode()
         sparkle.position = node.position
         sparkle.addParticleSystem(WorldKit.burst(color: NSColor(calibratedRed: 1, green: 0.85, blue: 0.3, alpha: 1), count: 25, speed: 3, size: 0.1))
