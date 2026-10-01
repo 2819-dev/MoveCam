@@ -29,9 +29,12 @@ final class MotionHub: ObservableObject {
     private var kbActiveUntil: TimeInterval = 0
     private var kbAirborneUntil: TimeInterval = 0
 
+    /// The latest camera reading with any keyboard input applied on top.
     var latest: MotionSnapshot {
         lock.lock(); defer { lock.unlock() }
-        return _latest
+        var snap = _latest
+        applyKeyboard(&snap, now: CACurrentMediaTime())
+        return snap
     }
 
     /// Hand-pose detection costs extra CPU, so it only runs in menus.
@@ -73,8 +76,8 @@ final class MotionHub: ObservableObject {
         var (snap, events) = interpreter.process(pose: result.pose, thumbsUp: lastThumbsUp && result.pose != nil, time: now)
 
         lock.lock()
-        applyKeyboard(&snap, now: now)
         _latest = snap
+        applyKeyboard(&snap, now: now)
         lock.unlock()
 
         DispatchQueue.main.async {

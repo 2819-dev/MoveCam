@@ -199,7 +199,7 @@ final class AppState: ObservableObject {
     }
 
     private func tick() {
-        let snap = hub.snapshot
+        let snap = hub.latest
         switch screen {
         case .menu:
             guard snap.status.isGood, !showProSheet else { stepArmed = true; return }
