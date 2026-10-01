@@ -1,20 +1,27 @@
 import Combine
 import Foundation
 
-/// Knows who this player is (an anonymous MoveCam ID) and whether they have Pro.
-/// Paid plans aren't live yet; for now moderators grant Pro by ID.
+/// Knows who this player is (an anonymous MoveCam ID) and their plan.
+/// Paid plans aren't live yet; for now moderators grant Pro or trials.
 @MainActor
 final class EntitlementService: ObservableObject {
+    enum Plan: String {
+        case free, pro, trial
+    }
+
     @Published private(set) var userID: String
-    @Published private(set) var isPro: Bool
+    @Published private(set) var plan: Plan
     @Published private(set) var proExpiry: Date?
     @Published private(set) var lastChecked: Date?
     @Published private(set) var isRefreshing = false
 
+    var isPro: Bool { plan != .free && (proExpiry.map { $0 > Date() } ?? true) }
+
     private static let idKey = "moveCamUserID"
-    private static let proKey = "cachedIsPro"
+    private static let planKey = "cachedPlan"
     private static let expiryKey = "cachedProExpiry"
     private var timer: Timer?
+    private var launched = false
 
     init() {
         let defaults = UserDefaults.standard
@@ -25,15 +32,15 @@ final class EntitlementService: ObservableObject {
             defaults.set(fresh, forKey: Self.idKey)
             userID = fresh
         }
-        let expiry = defaults.object(forKey: Self.expiryKey) as? Date
-        isPro = defaults.bool(forKey: Self.proKey) && (expiry.map { $0 > Date() } ?? true)
-        proExpiry = expiry
+        plan = Plan(rawValue: defaults.string(forKey: Self.planKey) ?? "") ?? .free
+        proExpiry = defaults.object(forKey: Self.expiryKey) as? Date
     }
 
     func startAutoRefresh() {
+        guard PreviewRenderer.outputDirectory == nil else { return }
         Task { await refresh() }
         timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: 30 * 60, repeats: true) { [weak self] _ in
+        timer = Timer.scheduledTimer(withTimeInterval: 20 * 60, repeats: true) { [weak self] _ in
             Task { await self?.refresh() }
         }
     }
@@ -42,27 +49,18 @@ final class EntitlementService: ObservableObject {
         guard !isRefreshing else { return }
         isRefreshing = true
         defer { isRefreshing = false }
-        var components = URLComponents(url: AppConfig.entitlementsRawURL, resolvingAgainstBaseURL: false)!
-        components.queryItems = [URLQueryItem(name: "t", value: String(Int(Date().timeIntervalSince1970 / 60)))]
-        var request = URLRequest(url: components.url!)
-        request.cachePolicy = .reloadIgnoringLocalCacheData
-        request.timeoutInterval = 15
-        do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard (response as? HTTPURLResponse)?.statusCode == 200 else { return }
-            let file = try JSONDecoder().decode(EntitlementsFile.self, from: data)
-            apply(file)
-        } catch {
-            // Offline: keep the cached answer.
+        var body: [String: Any] = ["userId": userID, "appVersion": AppConfig.version, "launch": !launched]
+        if Analytics.shared.isEnabled {
+            body["macOS"] = ProcessInfo.processInfo.operatingSystemVersionString
         }
-    }
-
-    func apply(_ file: EntitlementsFile) {
-        let grant = file.proUsers.first { UserIDFormat.normalize($0.userId) == userID && $0.isActive() }
-        isPro = grant != nil
-        proExpiry = grant?.expiryDate
+        guard let response: PlanResponse = try? await ServerAPI.send("POST", "api/checkin", body: body) else {
+            return // Offline: keep the cached plan.
+        }
+        launched = true
+        plan = Plan(rawValue: response.plan) ?? .free
+        proExpiry = response.expiresAt.flatMap(ISODate.parse)
         lastChecked = Date()
-        UserDefaults.standard.set(isPro, forKey: Self.proKey)
+        UserDefaults.standard.set(plan.rawValue, forKey: Self.planKey)
         UserDefaults.standard.set(proExpiry, forKey: Self.expiryKey)
     }
 }

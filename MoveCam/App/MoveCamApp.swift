@@ -13,7 +13,6 @@ struct MoveCamApp: App {
     @StateObject private var entitlements: EntitlementService
     @StateObject private var app: AppState
     @StateObject private var updater = UpdaterController()
-    @StateObject private var moderator = ModeratorService()
 
     init() {
         let hub = MotionHub()
@@ -33,7 +32,10 @@ struct MoveCamApp: App {
                 .environmentObject(camera)
                 .environmentObject(entitlements)
                 .environmentObject(updater)
-                .onAppear { entitlements.startAutoRefresh() }
+                .onAppear {
+                    entitlements.startAutoRefresh()
+                    Analytics.shared.start(userID: entitlements.userID)
+                }
         }
         .defaultSize(width: 1440, height: 900)
         .commands {
@@ -45,10 +47,8 @@ struct MoveCamApp: App {
 
         Window("Moderator Panel", id: "moderator") {
             ModeratorPanelView()
-                .environmentObject(moderator)
-                .environmentObject(entitlements)
         }
-        .defaultSize(width: 720, height: 620)
+        .defaultSize(width: 1100, height: 720)
 
         Settings {
             SettingsView()

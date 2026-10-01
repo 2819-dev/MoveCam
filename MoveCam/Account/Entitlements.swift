@@ -1,33 +1,15 @@
 import Foundation
 
-/// The shared Pro access list, stored as `entitlements.json` in the GitHub repo.
-struct EntitlementsFile: Codable, Equatable {
-    var version: Int = 1
-    var proUsers: [ProGrant] = []
-}
-
-struct ProGrant: Codable, Identifiable, Hashable {
-    var userId: String
-    var note: String?
-    var grantedBy: String?
-    var grantedAt: String?
-    /// ISO date ("2026-12-31") or nil for no expiry.
-    var expiresAt: String?
-
-    var id: String { userId }
-
-    var expiryDate: Date? { expiresAt.flatMap(ISODate.parse) }
-
-    func isActive(at date: Date = Date()) -> Bool {
-        guard let expiry = expiryDate else { return true }
-        return expiry > date
-    }
-}
-
 enum ISODate {
     private static let full: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime]
+        return f
+    }()
+
+    private static let fractional: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return f
     }()
 
@@ -38,7 +20,7 @@ enum ISODate {
     }()
 
     static func parse(_ string: String) -> Date? {
-        if let d = full.date(from: string) { return d }
+        if let d = fractional.date(from: string) ?? full.date(from: string) { return d }
         // A date-only expiry lasts through the end of that day (UTC).
         return dateOnly.date(from: string).map { $0.addingTimeInterval(86_400) }
     }

@@ -38,6 +38,7 @@ final class AppState: ObservableObject {
     private var countdownTask: Task<Void, Never>?
     private var toastTask: Task<Void, Never>?
     private var keyMonitor: Any?
+    private var gameStartedAt: Date?
 
     var games: [GameInfo] { GameInfo.all }
     var selectedGame: GameInfo { games[min(selectedIndex, games.count - 1)] }
@@ -76,6 +77,7 @@ final class AppState: ObservableObject {
     func startSelected() {
         let info = selectedGame
         if isLocked(info) {
+            Analytics.shared.log("locked", game: info.id)
             showProSheet = true
             sound.play(.pause)
             return
@@ -126,6 +128,8 @@ final class AppState: ObservableObject {
                 self.activeGame?.setPaused(false)
             } else {
                 self.gameStarted = true
+                self.gameStartedAt = Date()
+                if let info = self.activeInfo { Analytics.shared.log("start", game: info.id) }
                 self.activeGame?.start()
             }
         }
@@ -157,6 +161,13 @@ final class AppState: ObservableObject {
 
     func backToMenu() {
         countdownTask?.cancel()
+        if gameStarted, let info = activeInfo, let started = gameStartedAt {
+            // Leaving from the results screen isn't quitting early.
+            if case .over = phase {} else {
+                Analytics.shared.log("quit", game: info.id, score: activeGame?.hud.score, seconds: Date().timeIntervalSince(started))
+            }
+        }
+        gameStartedAt = nil
         activeGame?.stop()
         activeGame = nil
         activeInfo = nil
@@ -179,6 +190,7 @@ final class AppState: ObservableObject {
     private func gameFinished(_ result: GameResult) {
         guard screen == .game, let info = activeInfo else { return }
         let best = GameInfo.record(result.score, for: info.id)
+        Analytics.shared.log("finish", game: info.id, score: result.score, seconds: gameStartedAt.map { Date().timeIntervalSince($0) })
         phase = .over(result, isBest: best)
         hub.detectHands = true
         hub.resetGestures()
@@ -196,6 +208,12 @@ final class AppState: ObservableObject {
             if showProSheet { showProSheet = false } else { startSelected() }
         case (.menu, .back):
             if showProSheet { showProSheet = false }
+        case (.menu, .swipeLeft):
+            if !showProSheet { moveSelection(-1) }
+        case (.menu, .swipeRight):
+            if !showProSheet { moveSelection(1) }
+        case (.game, .swipeLeft), (.game, .swipeRight):
+            break
         case (.game, .confirm):
             switch phase {
             case .waiting: beginCountdown()

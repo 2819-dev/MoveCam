@@ -98,6 +98,9 @@ enum GestureEvent {
     case confirm
     /// Both hands raised above the head.
     case back
+    /// Left arm swung outward to the left / right arm swung outward to the right.
+    case swipeLeft
+    case swipeRight
 }
 
 /// Everything a game needs to know about the player, sampled once per frame.

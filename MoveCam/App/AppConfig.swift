@@ -1,15 +1,9 @@
 import Foundation
 
 enum AppConfig {
-    /// GitHub repository that hosts releases and the Pro access list.
+    /// GitHub repository that hosts releases.
     static let repoOwner = "2819-dev"
     static let repoName = "MoveCam"
-    static let entitlementsBranch = "main"
-    static let entitlementsPath = "entitlements.json"
-
-    static var entitlementsRawURL: URL {
-        URL(string: "https://raw.githubusercontent.com/\(repoOwner)/\(repoName)/\(entitlementsBranch)/\(entitlementsPath)")!
-    }
 
     static var releasesURL: URL {
         URL(string: "https://github.com/\(repoOwner)/\(repoName)/releases")!

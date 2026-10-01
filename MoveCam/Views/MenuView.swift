@@ -17,7 +17,7 @@ struct MenuView: View {
                         Text("Games")
                             .font(Theme.title(30))
                             .foregroundStyle(.white)
-                        Text("Step left or right to choose. Thumbs up or raise a hand to play.")
+                        Text("Swing an arm out to the side to choose. Raise a hand or thumbs up to play.")
                             .font(Theme.body(15))
                             .foregroundStyle(Theme.secondary)
                     }
@@ -195,7 +195,7 @@ struct GameArtwork: View {
 struct HintBar: View {
     var body: some View {
         HStack(spacing: 28) {
-            GestureHint(symbol: "figure.walk", title: "Step left or right", detail: "Choose a game")
+            GestureHint(symbol: "hand.wave.fill", title: "Swing an arm out", detail: "Choose a game")
             GestureHint(symbol: "hand.raised.fill", title: "Thumbs up or raise a hand", detail: "Play")
             GestureHint(symbol: "figure.arms.open", title: "Both hands up", detail: "Pause or go back")
             Spacer()
@@ -260,7 +260,7 @@ struct PlanBadge: View {
 
     var body: some View {
         if entitlements.isPro {
-            Label("Pro", systemImage: "star.fill")
+            Label(entitlements.plan == .trial ? "Pro trial" : "Pro", systemImage: "star.fill")
                 .font(Theme.body(13, .semibold))
                 .padding(.horizontal, 12)
                 .frame(height: 32)

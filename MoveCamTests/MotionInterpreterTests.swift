@@ -12,6 +12,9 @@ private struct Rig {
     var leftUp = false
     var rightUp = false
     var reach: CGFloat = 0          // hands pushed out sideways (torso units)
+    /// Explicit hand positions in torso units: x from the neck (+ = right), y from the hips.
+    var leftHand: CGPoint?
+    var rightHand: CGPoint?
     let aspect: CGFloat = 16.0 / 9.0
 
     func pose(jitter: CGFloat, rng: inout SystemRandomNumberGenerator) -> BodyPose {
@@ -29,7 +32,7 @@ private struct Rig {
         let lw = leftUp ? wristUp : wristDown
         let rw = rightUp ? wristUp : wristDown
         let out = 0.1 * s + reach * torso
-        let joints: [Joint: CGPoint] = [
+        var joints: [Joint: CGPoint] = [
             .nose: pt(0, nose), .neck: pt(0, neck),
             .leftShoulder: pt(-0.08 * s, neck - 0.01), .rightShoulder: pt(0.08 * s, neck - 0.01),
             .leftElbow: pt(-out * 0.8, (neck + lw) / 2), .rightElbow: pt(out * 0.8, (neck + rw) / 2),
@@ -38,6 +41,13 @@ private struct Rig {
             .leftKnee: pt(-0.05 * s, knee), .rightKnee: pt(0.05 * s, knee),
             .leftAnkle: pt(-0.05 * s, ankle), .rightAnkle: pt(0.05 * s, ankle),
         ]
+        for (joint, elbow, hand) in [(Joint.leftWrist, Joint.leftElbow, leftHand), (.rightWrist, .rightElbow, rightHand)] {
+            guard let hand else { continue }
+            let wrist = pt(hand.x * torso, hip + hand.y * torso)
+            joints[joint] = wrist
+            let shoulder = joints[joint == .leftWrist ? .leftShoulder : .rightShoulder]!
+            joints[elbow] = CGPoint(x: (wrist.x + shoulder.x) / 2, y: (wrist.y + shoulder.y) / 2)
+        }
         return BodyPose(joints: joints, aspect: aspect)
     }
 }
@@ -77,6 +87,32 @@ private final class Session {
     }
 
     var confirms: Int { events.filter { $0 == .confirm }.count }
+    var swipesLeft: Int { events.filter { $0 == .swipeLeft }.count }
+    var swipesRight: Int { events.filter { $0 == .swipeRight }.count }
+
+    /// Moves a hand from one point to another (torso units) over `seconds`.
+    func moveHand(right: Bool, from a: CGPoint, to b: CGPoint, seconds: Double) {
+        run(seconds) { u in
+            let p = CGPoint(x: a.x + (b.x - a.x) * CGFloat(u), y: a.y + (b.y - a.y) * CGFloat(u))
+            if right { self.rig.rightHand = p } else { self.rig.leftHand = p }
+        }
+    }
+
+    /// A natural swing: hand comes up to the chest, flicks outward, comes back, drops.
+    func swing(right: Bool, outSeconds: Double = 0.25) {
+        let side: CGFloat = right ? 1 : -1
+        let chest = CGPoint(x: 0.2 * side, y: 0.8)
+        let out = CGPoint(x: 1.4 * side, y: 0.9)
+        let rest = CGPoint(x: 0.35 * side, y: 0.05)
+        moveHand(right: right, from: rest, to: chest, seconds: 0.4)
+        run(0.2)
+        moveHand(right: right, from: chest, to: out, seconds: outSeconds)
+        run(0.15)
+        moveHand(right: right, from: out, to: chest, seconds: 0.35)
+        moveHand(right: right, from: chest, to: rest, seconds: 0.4)
+        if right { rig.rightHand = nil } else { rig.leftHand = nil }
+        run(0.3)
+    }
     var backs: Int { events.filter { $0 == .back }.count }
 }
 
@@ -303,5 +339,91 @@ final class MotionInterpreterTests: XCTestCase {
         rig.floor = -0.4
         XCTAssertEqual(MotionInterpreter.evaluateStatus(rig.pose(jitter: 0, rng: &rng)), .tooClose)
         XCTAssertEqual(MotionInterpreter.evaluateStatus(nil), .noPerson)
+    }
+
+    // MARK: - Arm swipes (menu)
+
+    func testRightArmSwingSelectsRight() {
+        let s = Session()
+        s.run(2)
+        s.swing(right: true)
+        XCTAssertEqual(s.swipesRight, 1)
+        XCTAssertEqual(s.swipesLeft, 0)
+        XCTAssertEqual(s.confirms, 0)
+        XCTAssertEqual(s.backs, 0)
+    }
+
+    func testLeftArmSwingSelectsLeft() {
+        let s = Session()
+        s.run(2)
+        s.swing(right: false)
+        XCTAssertEqual(s.swipesLeft, 1)
+        XCTAssertEqual(s.swipesRight, 0)
+    }
+
+    func testRepeatedSwingsEachCount() {
+        let s = Session()
+        s.run(2)
+        for _ in 0..<3 { s.swing(right: true) }
+        XCTAssertEqual(s.swipesRight, 3)
+        XCTAssertEqual(s.swipesLeft, 0)
+    }
+
+    func testSwingWorksFarFromCamera() {
+        let s = Session()
+        s.rig.scale = 0.55
+        s.run(2)
+        s.swing(right: true)
+        XCTAssertEqual(s.swipesRight, 1)
+    }
+
+    func testSlowArmMovementIsNotASwing() {
+        let s = Session()
+        s.run(2)
+        s.swing(right: true, outSeconds: 1.6)
+        XCTAssertEqual(s.swipesRight + s.swipesLeft, 0)
+    }
+
+    func testOpeningBothArmsIsNotASwing() {
+        let s = Session()
+        s.run(2)
+        s.run(0.25) { u in
+            s.rig.leftHand = CGPoint(x: -0.2 - 1.2 * CGFloat(u), y: 0.9)
+            s.rig.rightHand = CGPoint(x: 0.2 + 1.2 * CGFloat(u), y: 0.9)
+        }
+        s.run(0.5)
+        XCTAssertEqual(s.swipesRight + s.swipesLeft, 0)
+    }
+
+    func testSteppingSidewaysIsNotASwing() {
+        let s = Session()
+        s.rig.rightHand = CGPoint(x: 0.3, y: 0.8)
+        s.rig.leftHand = CGPoint(x: -0.3, y: 0.8)
+        s.run(2)
+        s.run(0.3) { u in s.rig.centerX = 0.5 + 0.15 * CGFloat(u) }
+        s.run(0.3) { u in s.rig.centerX = 0.65 - 0.3 * CGFloat(u) }
+        s.run(0.5)
+        XCTAssertEqual(s.swipesRight + s.swipesLeft, 0)
+    }
+
+    func testRaisingOneHandIsNotASwing() {
+        let s = Session()
+        s.run(2)
+        s.rig.rightUp = true
+        s.run(1.2)
+        s.rig.rightUp = false
+        s.run(0.5)
+        XCTAssertEqual(s.swipesRight + s.swipesLeft, 0)
+        XCTAssertEqual(s.confirms, 1)
+    }
+
+    func testBothHandsUpIsNotASwing() {
+        let s = Session()
+        s.run(2)
+        s.rig.leftUp = true
+        s.rig.rightUp = true
+        s.run(1.5)
+        XCTAssertEqual(s.swipesRight + s.swipesLeft, 0)
+        XCTAssertEqual(s.backs, 1)
     }
 }

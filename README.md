@@ -25,6 +25,7 @@ Stand back until the outline turns green. The camera should see you from your he
 |---|---|---|---|---|
 | ✋ **Raise one hand** above your head, or 👍 **thumbs up** (hold briefly) | Play selected game | | Resume | Play again |
 | 🙌 **Both hands above your head** (hold) | | Pause | Back to main menu | Back to main menu |
+| 👋 **Swing an arm out** to the side (right arm → right, left arm → left) | Browse games | | | |
 | 🚶 **Step left / right** (about half a step) | Browse games | Change lane / steer | | |
 | ⬆️ **Jump** · ⬇️ **Squat** | | Jump · crouch / tuck | | |
 
@@ -46,18 +47,28 @@ A ring in the live view fills up while you hold a gesture. If you walk out of vi
 
 ## Pro plan and moderators
 
-Paid plans aren't live yet. Pro games show a lock and a "Pro is coming soon" card. Until payments launch, **moderators can give any player Pro for free**:
+Paid plans aren't live yet. Pro games show a lock and a "Pro is coming soon" card. Until payments launch, **moderators can give any player Pro or a trial for free**.
 
-1. The player finds their **MoveCam ID** (looks like `MC-AB12-CD34`) under **Settings → Account**, or on the Pro card when they pick a locked game, and sends it to you.
-2. Open the **Moderator Panel** with **⌥⌘M** (also under the **Window** menu).
-3. Sign in with a GitHub [fine-grained personal access token](https://github.com/settings/personal-access-tokens/new) that has access to only this repository, with **Contents: Read and write**. Only people with write access to this repo can moderate. The token is stored in your Keychain.
-4. Paste the player's ID, add an optional note and expiry date, and click **Grant Pro**. You can search the list and remove Pro the same way.
+1. Open the **Moderator Panel** with **⌥⌘M** (also in the **Window** menu) and enter the moderator password.
+2. You'll see every player who has opened MoveCam:
+   - totals: players, active today, Pro/trial players, games played
+   - a searchable list showing last seen, number of games and favorite game
+3. Type a player's **MoveCam ID** (they find it in **Settings → Account**, or on the Pro card when they pick a locked game) to search, then click them.
+4. The player page shows sessions, play time, per-game plays and best scores, and their recent activity. Use **Give Pro**, **Give Trial** (choose the number of days) or **Remove**. The player's app picks it up within a few minutes.
+5. **Change Password** in the panel's toolbar changes the moderator password and signs out any other open panels. After 8 wrong guesses, the panel locks for 15 minutes.
 
-Grants are stored in [`entitlements.json`](entitlements.json) on `main`. Players' apps check it at launch and every 30 minutes, so Pro shows up within a few minutes. Each change is a commit, which gives you a history of who granted what.
+Players can turn off sharing play stats in **Settings → Account**. Only game names, scores and play time are collected, tied to the random MoveCam ID: never video or personal information.
 
-> If `main` is branch-protected against direct pushes, allow your moderators to bypass the rule or the panel can't save.
+### The server
 
-> This is a stop-gap. When paid plans launch, entitlements should move to a real backend with purchase verification. The app only reads `EntitlementService`, so that swap is contained.
+The panel, player list and Pro checks run on a small server in [`server/`](server): Netlify Functions plus Netlify Blobs storage, deployed as the Netlify project **movecam-api** (`https://movecam-api.netlify.app`). The moderator password and session secret are stored as Netlify environment variables, never in the app.
+
+**One-time setup** (no keys needed): connect the Netlify project to this GitHub repo so it deploys automatically.
+
+1. Open [app.netlify.com/projects/movecam-api](https://app.netlify.com/projects/movecam-api) → **Project configuration** → **Build & deploy** → **Link repository**.
+2. Choose GitHub → **2819-dev/MoveCam**.
+3. Set **Base directory** to `server` and the **Branch to deploy** to `main`. Leave the build command and publish directory as they are; `server/netlify.toml` sets them.
+4. Click **Deploy**. From then on, every push to `main` that changes `server/` redeploys it.
 
 ## Updates
 

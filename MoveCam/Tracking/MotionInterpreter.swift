@@ -48,6 +48,9 @@ final class MotionInterpreter {
     private var candidateStatus: PositionStatus = .noPerson
     private var candidateFrames = 0
 
+    private var swipeHistory: [[(t: TimeInterval, x: CGFloat, y: CGFloat)]] = [[], []]
+    private var swipeCooldownUntil: TimeInterval = 0
+
     private var handsUp = HeldGesture(grace: 0.2)
     private var thumbs = HeldGesture(grace: 0.25)
     private var raiseHand = HeldGesture(grace: 0.2)
@@ -97,6 +100,10 @@ final class MotionInterpreter {
             snap.leftHand = hand(0, wrist: pose.joints[.leftWrist], neck: neck, hip: hip, torso: torso, aspect: pose.aspect, time: time)
             snap.rightHand = hand(1, wrist: pose.joints[.rightWrist], neck: neck, hip: hip, torso: torso, aspect: pose.aspect, time: time)
 
+            if let swipe = detectSwipe(pose: pose, neck: neck, hip: hip, torso: torso, time: time) {
+                events.append(swipe)
+            }
+
             let head = pose.joints[.nose]?.y ?? (neck.y + torso * 0.35)
             if let lw = pose.joints[.leftWrist], let rw = pose.joints[.rightWrist] {
                 let leftUp = lw.y > head + torso * 0.05
@@ -137,6 +144,43 @@ final class MotionInterpreter {
         handsUp.reset(requireRelease: true)
         thumbs.reset(requireRelease: true)
         raiseHand.reset(requireRelease: true)
+    }
+
+    // MARK: - Arm swipes
+
+    /// An outward arm swing: right hand out to the right → `.swipeRight`,
+    /// left hand out to the left → `.swipeLeft`. Bringing the arm back in
+    /// doesn't count, and opening both arms at once is ignored.
+    private func detectSwipe(pose: BodyPose, neck: CGPoint, hip: CGPoint, torso: CGFloat, time: TimeInterval) -> GestureEvent? {
+        let window: TimeInterval = 0.4
+        var outward: [CGFloat] = [0, 0]
+        for (i, joint) in [Joint.leftWrist, .rightWrist].enumerated() {
+            guard let wrist = pose.joints[joint] else { swipeHistory[i].removeAll(); continue }
+            let x = (wrist.x - neck.x) * pose.aspect / torso   // + = toward the player's right side of the screen
+            let y = (wrist.y - hip.y) / torso                  // 0 = hips, 1 = neck
+            swipeHistory[i].append((time, x, y))
+            swipeHistory[i].removeAll { time - $0.t > window }
+            let side: CGFloat = i == 0 ? -1 : 1               // outward direction for this hand
+            if let start = swipeHistory[i].min(by: { $0.x * side < $1.x * side }) {
+                outward[i] = (x - start.x) * side
+            }
+        }
+        guard time >= swipeCooldownUntil else { return nil }
+        for i in 0..<2 {
+            guard let now = swipeHistory[i].last else { continue }
+            let side: CGFloat = i == 0 ? -1 : 1
+            guard let start = swipeHistory[i].min(by: { $0.x * side < $1.x * side }) else { continue }
+            let distance = outward[i]
+            let speed = distance / CGFloat(max(now.t - start.t, 1.0 / 60))
+            let otherHandOpening = outward[1 - i] > 0.5
+            if distance > 0.85, speed > 2.0, now.x * side > 0.7, start.x * side < 0.5,
+               now.y > 0.25, now.y < 2.0, !otherHandOpening {
+                swipeCooldownUntil = time + 0.6
+                swipeHistory = [[], []]
+                return i == 0 ? .swipeLeft : .swipeRight
+            }
+        }
+        return nil
     }
 
     // MARK: - Tracking continuity

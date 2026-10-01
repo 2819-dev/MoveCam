@@ -50,6 +50,7 @@ private struct GeneralSettings: View {
 
 private struct AccountSettings: View {
     @EnvironmentObject var entitlements: EntitlementService
+    @AppStorage(Analytics.enabledKey) private var shareUsage = true
 
     var body: some View {
         Form {
@@ -63,13 +64,12 @@ private struct AccountSettings: View {
                 }
             }
             LabeledContent("Plan") {
-                if entitlements.isPro {
-                    if let expiry = entitlements.proExpiry {
-                        Text("Pro until \(expiry.formatted(date: .abbreviated, time: .omitted))")
-                    } else {
-                        Text("Pro")
-                    }
-                } else {
+                switch entitlements.plan {
+                case .pro where entitlements.isPro:
+                    Text(entitlements.proExpiry.map { "Pro until \($0.formatted(date: .abbreviated, time: .omitted))" } ?? "Pro")
+                case .trial where entitlements.isPro:
+                    Text(entitlements.proExpiry.map { "Pro trial until \($0.formatted(date: .abbreviated, time: .shortened))" } ?? "Pro trial")
+                default:
                     Text("Free — Pro is coming soon")
                 }
             }
@@ -84,6 +84,9 @@ private struct AccountSettings: View {
                 }
             }
             Text("Share your ID with a moderator to get early access to Pro games.")
+                .font(.caption).foregroundStyle(.secondary)
+            Toggle("Share anonymous play stats", isOn: $shareUsage)
+            Text("Which games you play, scores and play time, linked only to your MoveCam ID. Never video or anything personal.")
                 .font(.caption).foregroundStyle(.secondary)
         }
         .formStyle(.grouped)
