@@ -37,7 +37,13 @@ struct RootView: View {
             window.backgroundColor = .black
         })
         .preferredColorScheme(.dark)
-        .onAppear { camera.start() }
+        .onAppear {
+            if let dir = PreviewRenderer.outputDirectory {
+                PreviewRenderer.run(into: dir)
+            } else {
+                camera.start()
+            }
+        }
     }
 }
 

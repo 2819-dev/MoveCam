@@ -30,3 +30,18 @@ jobs:
             CODE_SIGN_IDENTITY=- \
             build 2>&1 | grep -E "error:|warning: unre|\*\* BUILD" || true
           test -d build/Build/Products/Release/MoveCam.app
+
+      - name: Render game previews
+        run: |
+          build/Build/Products/Release/MoveCam.app/Contents/MacOS/MoveCam --render-previews "$PWD/previews" &
+          PID=$!
+          for i in $(seq 1 90); do kill -0 $PID 2>/dev/null || break; sleep 1; done
+          kill $PID 2>/dev/null || true
+          ls -la previews || true
+
+      - name: Upload previews
+        uses: actions/upload-artifact@v4
+        with:
+          name: game-previews
+          path: previews
+          if-no-files-found: warn
