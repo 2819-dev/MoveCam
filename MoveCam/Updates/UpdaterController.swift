@@ -81,11 +81,16 @@ final class UpdaterController: ObservableObject {
         request.setValue("MoveCam/\(AppConfig.version)", forHTTPHeaderField: "User-Agent")
         request.cachePolicy = .reloadIgnoringLocalCacheData
         request.timeoutInterval = 20
-        guard let (data, response) = try? await URLSession.shared.data(for: request),
-              (response as? HTTPURLResponse)?.statusCode == 200,
-              let release = try? JSONDecoder().decode(Release.self, from: data) else {
-            return false
+        var release: Release?
+        if let (data, response) = try? await URLSession.shared.data(for: request),
+           (response as? HTTPURLResponse)?.statusCode == 200 {
+            release = try? JSONDecoder().decode(Release.self, from: data)
         }
+        if release == nil {
+            // The GitHub API is rate-limited per network; the public releases page isn't.
+            release = await releaseFromWebsite()
+        }
+        guard let release else { return false }
         lastChecked = Date()
         let latest = release.tag_name.hasPrefix("v") ? String(release.tag_name.dropFirst()) : release.tag_name
         guard Version(latest) > Version(AppConfig.version),
@@ -98,6 +103,25 @@ final class UpdaterController: ObservableObject {
                                     dmgURL: release.assets.first(where: { $0.name == "MoveCam.dmg" })?.browser_download_url,
                                     pageURL: release.html_url)
         return true
+    }
+
+    /// Follows github.com/<repo>/releases/latest to its /tag/vX.Y.Z page and builds
+    /// the asset links from the release workflow's naming.
+    private func releaseFromWebsite() async -> Release? {
+        let latest = URL(string: "https://github.com/\(AppConfig.repoOwner)/\(AppConfig.repoName)/releases/latest")!
+        var request = URLRequest(url: latest)
+        request.httpMethod = "HEAD"
+        request.timeoutInterval = 20
+        guard let (_, response) = try? await URLSession.shared.data(for: request),
+              let final = response.url, final.path.contains("/releases/tag/") else { return nil }
+        let tag = final.lastPathComponent
+        let version = tag.hasPrefix("v") ? String(tag.dropFirst()) : tag
+        guard Version(version).parts.count >= 2 else { return nil }
+        let base = "https://github.com/\(AppConfig.repoOwner)/\(AppConfig.repoName)/releases/download/\(tag)/"
+        return Release(tag_name: tag, html_url: final, assets: [
+            .init(name: "MoveCam-\(version).zip", browser_download_url: URL(string: base + "MoveCam-\(version).zip")!),
+            .init(name: "MoveCam.dmg", browser_download_url: URL(string: base + "MoveCam.dmg")!),
+        ])
     }
 
     /// Menu bar "Check for Updates…": always tells the player what happened.
