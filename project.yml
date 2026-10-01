@@ -45,6 +45,7 @@ targets:
       - path: MoveCam/Tracking/MotionInterpreter.swift
       - path: MoveCam/Tracking/OneEuroFilter.swift
       - path: MoveCam/Tracking/ThumbsUpClassifier.swift
+      - path: MoveCam/Camera/FrameTiming.swift
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES

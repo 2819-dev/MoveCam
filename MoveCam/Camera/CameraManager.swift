@@ -156,26 +156,18 @@ final class CameraManager: NSObject, ObservableObject {
 }
 
 extension CameraManager {
-    /// Picks the fastest capture mode around 720p (up to 60 fps) and stops the
-    /// camera from slowing to 10-15 fps in dim rooms, which makes tracking lag.
+    /// Keeps the camera at 30-60 fps instead of letting it slow to 10-15 fps
+    /// in dim rooms, which makes tracking lag. Uses only the camera's own
+    /// reported limits (see FrameTiming).
     static func configureSpeed(_ device: AVCaptureDevice) {
-        func width(_ f: AVCaptureDevice.Format) -> Int32 { CMVideoFormatDescriptionGetDimensions(f.formatDescription).width }
-        func maxFPS(_ f: AVCaptureDevice.Format) -> Double { f.videoSupportedFrameRateRanges.map(\.maxFrameRate).max() ?? 0 }
+        guard let range = device.activeFormat.videoSupportedFrameRateRanges.max(by: { $0.maxFrameRate < $1.maxFrameRate }),
+              let timing = FrameTiming.durations(fastest: range.minFrameDuration, slowest: range.maxFrameDuration)
+        else { return }
         do {
             try device.lockForConfiguration()
-            defer { device.unlockForConfiguration() }
-            // Same resolution class, faster frame rate: switch to it (USB / iPhone cameras often have one).
-            let current = device.activeFormat
-            let candidates = device.formats.filter { (960...1920).contains(width($0)) && CMFormatDescriptionGetMediaSubType($0.formatDescription) == CMFormatDescriptionGetMediaSubType(current.formatDescription) }
-            if let faster = candidates.max(by: { (min(maxFPS($0), 60), -abs(Int(width($0)) - 1280)) < (min(maxFPS($1), 60), -abs(Int(width($1)) - 1280)) }),
-               min(maxFPS(faster), 60) > min(maxFPS(current), 60) + 1 {
-                device.activeFormat = faster
-            }
-            guard let range = device.activeFormat.videoSupportedFrameRateRanges.max(by: { $0.maxFrameRate < $1.maxFrameRate }) else { return }
-            let fps = min(range.maxFrameRate, 60)
-            let floor = max(min(30, fps), range.minFrameRate)
-            device.activeVideoMinFrameDuration = CMTime(value: 1000, timescale: CMTimeScale(fps * 1000))
-            device.activeVideoMaxFrameDuration = CMTime(value: 1000, timescale: CMTimeScale(floor * 1000))
+            device.activeVideoMinFrameDuration = timing.min
+            device.activeVideoMaxFrameDuration = timing.max
+            device.unlockForConfiguration()
         } catch {
             // Another app has the camera locked; keep its defaults.
         }
