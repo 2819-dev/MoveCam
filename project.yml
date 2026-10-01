@@ -1,0 +1,41 @@
+name: MoveCam
+options:
+  bundleIdPrefix: dev.movecam
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+packages:
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    exactVersion: 2.6.4
+settings:
+  base:
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "10000"
+    SWIFT_VERSION: "5.0"
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+targets:
+  MoveCam:
+    type: application
+    platform: macOS
+    sources:
+      - path: MoveCam
+    settings:
+      base:
+        PRODUCT_NAME: MoveCam
+        PRODUCT_BUNDLE_IDENTIFIER: dev.movecam.MoveCam
+        INFOPLIST_FILE: Config/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_ENTITLEMENTS: Config/MoveCam.entitlements
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGN_STYLE: Manual
+        DEVELOPMENT_TEAM: ""
+        ENABLE_HARDENED_RUNTIME: NO
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        COMBINE_HIDPI_IMAGES: YES
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+        # Filled in by the release workflow from the SPARKLE_PUBLIC_KEY repository variable.
+        SPARKLE_PUBLIC_KEY: ""
+    dependencies:
+      - package: Sparkle
+    scheme: {}

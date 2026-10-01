@@ -1,0 +1,130 @@
+name: Release
+
+# Publish a release by pushing a tag like v1.2.0, or run this workflow by hand.
+#
+# Versioning drives how players get the update:
+#   - Minor/patch (v1.2.0 -> v1.3.0 or v1.2.1): downloads and installs silently in the background.
+#   - Major (v1.x -> v2.0.0): MoveCam asks the player before installing.
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, e.g. 1.2.0"
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  SPARKLE_VERSION: "2.6.4"
+
+jobs:
+  release:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Work out version numbers
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
+          VERSION="${VERSION#v}"
+          if ! [[ "$VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            echo "::error::Version must look like 1.2.3 (got '$VERSION')"; exit 1
+          fi
+          MAJOR=${BASH_REMATCH[1]}; MINOR=${BASH_REMATCH[2]}; PATCH=${BASH_REMATCH[3]}
+          if [ "$MINOR" -gt 99 ] || [ "$PATCH" -gt 99 ]; then
+            echo "::error::Minor and patch numbers must be below 100"; exit 1
+          fi
+          # Monotonic build number: 1.2.3 -> 10203. Sparkle compares these.
+          BUILD=$((MAJOR * 10000 + MINOR * 100 + PATCH))
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "build=$BUILD" >> "$GITHUB_OUTPUT"
+          echo "major_floor=$((MAJOR * 10000))" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build app
+        env:
+          SPARKLE_PUBLIC_KEY: ${{ vars.SPARKLE_PUBLIC_KEY }}
+        run: |
+          set -o pipefail
+          if [ -z "$SPARKLE_PUBLIC_KEY" ]; then
+            echo "::warning::SPARKLE_PUBLIC_KEY repository variable is not set; this build will not auto-update. See README."
+          fi
+          xcodebuild \
+            -project MoveCam.xcodeproj \
+            -scheme MoveCam \
+            -configuration Release \
+            -derivedDataPath build \
+            -destination 'generic/platform=macOS' \
+            MARKETING_VERSION="${{ steps.version.outputs.version }}" \
+            CURRENT_PROJECT_VERSION="${{ steps.version.outputs.build }}" \
+            SPARKLE_PUBLIC_KEY="$SPARKLE_PUBLIC_KEY" \
+            CODE_SIGN_IDENTITY=- \
+            build 2>&1 | grep -E "error:|\*\* BUILD" || true
+          test -d build/Build/Products/Release/MoveCam.app
+
+      - name: Package
+        id: package
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          mkdir -p dist
+          cp -R build/Build/Products/Release/MoveCam.app dist/
+          # Ad-hoc signature so Apple Silicon Macs will run it.
+          codesign --force --deep --sign - dist/MoveCam.app
+          ditto -c -k --sequesterRsrc --keepParent dist/MoveCam.app "dist/MoveCam-$VERSION.zip"
+          mkdir -p dmg
+          cp -R dist/MoveCam.app dmg/
+          ln -s /Applications dmg/Applications
+          hdiutil create -volname "MoveCam" -srcfolder dmg -ov -format UDZO "dist/MoveCam-$VERSION.dmg"
+          cp "dist/MoveCam-$VERSION.dmg" dist/MoveCam.dmg
+
+      - name: Sign update and write appcast
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          if [ -z "$SPARKLE_PRIVATE_KEY" ]; then
+            echo "::warning::SPARKLE_PRIVATE_KEY secret is not set; skipping appcast (no auto-update for this release)."
+            exit 0
+          fi
+          curl -sSL -o sparkle.tar.xz "https://github.com/sparkle-project/Sparkle/releases/download/${SPARKLE_VERSION}/Sparkle-${SPARKLE_VERSION}.tar.xz"
+          mkdir -p sparkle && tar -xf sparkle.tar.xz -C sparkle
+          printf '%s' "$SPARKLE_PRIVATE_KEY" > sparkle_key
+          SIGNATURE=$(./sparkle/bin/sign_update --ed-key-file sparkle_key "dist/MoveCam-$VERSION.zip")
+          rm -f sparkle_key
+          scripts/make_appcast.sh \
+            --version "$VERSION" \
+            --build "${{ steps.version.outputs.build }}" \
+            --minimum-autoupdate "${{ steps.version.outputs.major_floor }}" \
+            --url "https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.tag }}/MoveCam-$VERSION.zip" \
+            --signature "$SIGNATURE" \
+            --notes-url "https://github.com/${{ github.repository }}/releases/tag/${{ steps.version.outputs.tag }}" \
+            > dist/appcast.xml
+          cat dist/appcast.xml
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          VERSION="${{ steps.version.outputs.version }}"
+          FILES=("dist/MoveCam-$VERSION.dmg" "dist/MoveCam.dmg" "dist/MoveCam-$VERSION.zip")
+          [ -f dist/appcast.xml ] && FILES+=("dist/appcast.xml")
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "${FILES[@]}" --clobber
+          else
+            gh release create "$TAG" "${FILES[@]}" --title "MoveCam $VERSION" --generate-notes --target "$GITHUB_SHA"
+          fi

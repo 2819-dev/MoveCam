@@ -1,0 +1,32 @@
+name: Build
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project MoveCam.xcodeproj \
+            -scheme MoveCam \
+            -configuration Release \
+            -derivedDataPath build \
+            -destination 'generic/platform=macOS' \
+            CODE_SIGN_IDENTITY=- \
+            build 2>&1 | grep -E "error:|warning: unre|\*\* BUILD" || true
+          test -d build/Build/Products/Release/MoveCam.app
