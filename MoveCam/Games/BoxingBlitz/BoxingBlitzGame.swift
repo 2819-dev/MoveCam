@@ -5,7 +5,7 @@ import SpriteKit
 /// swinging bag, keep your combo alive.
 final class BoxingBlitzGame: SpriteGame {
     private final class Pad: SKNode {
-        let ring = SKShapeNode(circleOfRadius: 1)
+        var ring = SKShapeNode()
         var life: Double = 2
         var age: Double = 0
         var radius: CGFloat = 60
@@ -93,7 +93,7 @@ final class BoxingBlitzGame: SpriteGame {
             let pad = pads[i]
             pad.age += dt
             let left = max(0, 1 - pad.age / pad.life)
-            pad.ring.setScale(pad.radius * (1 + CGFloat(left) * 0.9))
+            pad.ring.setScale(1 + CGFloat(left) * 0.9)
             pad.ring.strokeColor = left > 0.35 ? NSColor(calibratedRed: 1, green: 0.85, blue: 0.2, alpha: 1) : .systemRed
             if let glove = gloves.first(where: { g in
                 guard let gp = g.position else { return false }
@@ -130,8 +130,9 @@ final class BoxingBlitzGame: SpriteGame {
         let face = SKSpriteNode(texture: SKTexture(image: Self.padImage))
         face.size = CGSize(width: pad.radius * 2, height: pad.radius * 2)
         pad.addChild(face)
-        pad.ring.lineWidth = 0.08
-        pad.ring.glowWidth = 0
+        pad.ring = SKShapeNode(circleOfRadius: pad.radius)
+        pad.ring.lineWidth = 6 * scale
+        pad.ring.glowWidth = 2
         pad.ring.strokeColor = .yellow
         pad.addChild(pad.ring)
         pad.zPosition = 20

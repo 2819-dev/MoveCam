@@ -103,6 +103,10 @@ final class CanyonRunGame: SceneGame {
         dustNode.addParticleSystem(dust)
         player.addChildNode(dustNode)
 
+        // A few rows already on the road so the action starts right away.
+        addCoinLine(lane: 1, z: -30, count: 5)
+        for z in [CGFloat(-60), -95, -128] { spawnRow(at: z) }
+
         hud.set { $0.lives = 3; $0.maxLives = 3; $0.stat = "🪙 0" }
     }
 
@@ -189,8 +193,7 @@ final class CanyonRunGame: SceneGame {
 
     // MARK: - Spawning
 
-    private func spawnRow() {
-        let z: CGFloat = -150
+    private func spawnRow(at z: CGFloat = -150) {
         obstaclesSpawned += 1
         let roll = Int.random(in: 0..<100)
         let freeLane = Int.random(in: 0..<3)
