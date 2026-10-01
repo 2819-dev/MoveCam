@@ -47,7 +47,11 @@ final class UpdaterController: ObservableObject {
 
     init() {
         guard PreviewRenderer.outputDirectory == nil, AppConfig.version != "dev" else { return }
-        Task { await check() }
+        Task {
+            await check()
+            // Used by CI to test the whole download-and-replace flow end to end.
+            if CommandLine.arguments.contains("--install-update-now") { install() }
+        }
         timer = Timer.scheduledTimer(withTimeInterval: 3 * 3600, repeats: true) { [weak self] _ in
             Task { await self?.check() }
         }
