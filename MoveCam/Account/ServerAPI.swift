@@ -2,7 +2,7 @@ import Foundation
 
 /// MoveCam's small backend (Netlify functions in /server).
 enum ServerAPI {
-    static let baseURL = URL(string: "https://movecam.pages.dev")!
+    static let baseURL = URL(string: "https://movecam.bhswebsite.org")!
 
     struct Failure: LocalizedError {
         let message: String

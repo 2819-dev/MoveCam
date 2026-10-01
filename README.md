@@ -19,11 +19,11 @@ Requires macOS 14 (Sonoma) or later. Runs on Apple Silicon and Intel.
 
 ### iPad (no App Store)
 
-1. Open **https://movecam.pages.dev/play/** in Safari.
+1. Open **https://movecam.bhswebsite.org/play/** in Safari.
 2. Tap **Share → Add to Home Screen**. MoveCam opens full screen like an app and works offline after the first load.
 3. Allow camera access, prop the iPad up, and step back.
 
-The landing page is at `https://movecam.pages.dev` and the download page at `/download/`.
+The landing page is at `https://movecam.bhswebsite.org` and the download page at `/download/`.
 
 ## How to play
 
@@ -69,7 +69,7 @@ Players can turn off sharing play stats in **Settings → Account**. Only game n
 
 ### The server
 
-The website, web app, moderator panel, player list and Pro checks are served from [`server/`](server) by **Cloudflare Pages** (project **movecam**, `https://movecam.pages.dev`):
+The website, web app, moderator panel, player list and Pro checks are served from [`server/`](server) by **Cloudflare Pages** (project **movecam**, `https://movecam.bhswebsite.org`, also `movecam.pages.dev`):
 
 - `server/public/`: the landing page, download page and web app (built by `web/`, committed)
 - `server/functions/api/`: Pages Functions for check-in, activity and the moderator API
