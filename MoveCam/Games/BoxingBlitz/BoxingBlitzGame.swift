@@ -337,10 +337,11 @@ final class BoxingBlitzGame: SpriteGame {
                 ctx.fillEllipse(in: CGRect(x: CGFloat(rng.next()) * s.width, y: s.height * 0.35 + CGFloat(rng.next()) * s.height * 0.35, width: r * 2, height: r * 2))
             }
             // Ring floor and ropes.
-            Art.linearGradient(ctx, colors: [NSColor(calibratedRed: 0.12, green: 0.18, blue: 0.4, alpha: 1), NSColor(calibratedRed: 0.05, green: 0.08, blue: 0.2, alpha: 1)],
-                               from: CGPoint(x: 0, y: s.height * 0.22), to: CGPoint(x: 0, y: 0))
-            ctx.setFillColor(NSColor(calibratedRed: 0.12, green: 0.18, blue: 0.4, alpha: 1).cgColor)
-            ctx.fill(CGRect(x: 0, y: 0, width: s.width, height: s.height * 0.22))
+            ctx.saveGState()
+            ctx.clip(to: CGRect(x: 0, y: 0, width: s.width, height: s.height * 0.3))
+            Art.linearGradient(ctx, colors: [NSColor(calibratedRed: 0.16, green: 0.22, blue: 0.48, alpha: 1), NSColor(calibratedRed: 0.04, green: 0.06, blue: 0.16, alpha: 1)],
+                               from: CGPoint(x: 0, y: s.height * 0.3), to: CGPoint(x: 0, y: 0))
+            ctx.restoreGState()
             let ropes: [NSColor] = [.systemRed, .white, .systemBlue]
             for (i, color) in ropes.enumerated() {
                 let y = s.height * (0.3 + CGFloat(i) * 0.09)

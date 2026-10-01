@@ -16,7 +16,7 @@ enum FruitArt {
         }
 
         var points: Int { self == .watermelon ? 15 : 10 }
-        var size: CGFloat { self == .watermelon ? 150 : (self == .kiwi ? 100 : 118) }
+        var size: CGFloat { self == .watermelon ? 190 : (self == .kiwi ? 130 : 150) }
     }
 
     private static var cache: [String: NSImage] = [:]

@@ -49,6 +49,8 @@ enum PreviewRenderer {
         if let scnView = session.contentView as? SCNView {
             cgImage = Art.cgImage(scnView.snapshot())
         } else if let skView = session.contentView as? SKView, let scene = skView.scene {
+            print("[preview] \(url.lastPathComponent): scene \(scene.size), \(scene.children.count) children:",
+                  scene.children.map { "\(type(of: $0))@\(Int($0.position.x)),\(Int($0.position.y)) z\(Int($0.zPosition)) a\($0.alpha) s\($0.xScale) hidden:\($0.isHidden)" })
             cgImage = skView.texture(from: scene)?.cgImage()
         }
         guard let cgImage else { return }
