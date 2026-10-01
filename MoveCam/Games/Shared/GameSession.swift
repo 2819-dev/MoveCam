@@ -144,6 +144,11 @@ class SpriteGame: SKScene, GameSession {
         skView.preferredFramesPerSecond = 60
         skView.presentScene(self)
         isPaused = true
+        buildIfNeeded()
+    }
+
+    private func buildIfNeeded() {
+        guard !built, size.width > 10, size.height > 10 else { return }
         built = true
         setupScene()
     }
@@ -159,12 +164,7 @@ class SpriteGame: SKScene, GameSession {
     override func didChangeSize(_ oldSize: CGSize) {
         super.didChangeSize(oldSize)
         guard size.width > 10, size.height > 10 else { return }
-        if !built {
-            built = true
-            setupScene()
-        } else {
-            layoutScene()
-        }
+        if built { layoutScene() } else { buildIfNeeded() }
     }
 
     override func update(_ currentTime: TimeInterval) {
@@ -176,10 +176,7 @@ class SpriteGame: SKScene, GameSession {
     }
 
     func start() {
-        if !built, size.width > 10 {
-            built = true
-            setupScene()
-        }
+        buildIfNeeded()
         lastTime = nil
         running = true
         isPaused = false
