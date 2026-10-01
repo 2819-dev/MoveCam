@@ -144,6 +144,8 @@ class SpriteGame: SKScene, GameSession {
         skView.preferredFramesPerSecond = 60
         skView.presentScene(self)
         isPaused = true
+        built = true
+        setupScene()
     }
 
     required init?(coder aDecoder: NSCoder) { fatalError("not supported") }

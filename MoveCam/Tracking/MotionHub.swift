@@ -19,6 +19,7 @@ final class MotionHub: ObservableObject {
     private var _handsUpHold = 1.0
     private var pendingReset = false
     private var frameIndex = 0
+    private var lastThumbsUp = false
 
     // Keyboard simulation (handy for testing without moving around).
     private var kbBodyX: CGFloat?
@@ -64,9 +65,12 @@ final class MotionHub: ObservableObject {
         }
         lock.unlock()
 
-        let result = detector.detect(pixelBuffer: pixelBuffer, detectHands: wantHands && frameIndex % 2 == 0)
+        // Hand pose runs on alternate frames to save CPU; reuse the last answer in between.
+        let runHands = wantHands && frameIndex % 2 == 0
+        let result = detector.detect(pixelBuffer: pixelBuffer, detectHands: runHands)
+        if runHands || !wantHands { lastThumbsUp = result.thumbsUp }
         let now = CACurrentMediaTime()
-        var (snap, events) = interpreter.process(pose: result.pose, thumbsUp: result.thumbsUp, time: now)
+        var (snap, events) = interpreter.process(pose: result.pose, thumbsUp: lastThumbsUp && result.pose != nil, time: now)
 
         lock.lock()
         applyKeyboard(&snap, now: now)

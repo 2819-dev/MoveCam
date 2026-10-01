@@ -28,6 +28,8 @@
 	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
 	<key>NSCameraUsageDescription</key>
 	<string>MoveCam uses your camera to track your body so you can play games by moving, jumping and gesturing. Video never leaves your Mac.</string>
+	<key>NSCameraUseContinuityCameraDeviceType</key>
+	<true/>
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSHumanReadableCopyright</key>
