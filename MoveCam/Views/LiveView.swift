@@ -13,7 +13,7 @@ struct LiveView: View {
     private var color: Color { status.isGood ? Theme.good : Theme.bad }
 
     var body: some View {
-        VStack(alignment: .trailing, spacing: 8) {
+        ZStack(alignment: .bottomLeading) {
             ZStack {
                 Color.black
                 CameraPreview(session: camera.session, isRunning: camera.isRunning)
@@ -43,6 +43,7 @@ struct LiveView: View {
             .padding(.horizontal, 10)
             .frame(height: 28)
             .background(color, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .padding(10)
         }
         .animation(.easeInOut(duration: 0.25), value: status)
     }
@@ -54,17 +55,17 @@ struct GestureRings: View {
 
     var body: some View {
         VStack {
-            Spacer()
             HStack {
                 if snapshot.thumbsUpProgress > 0.05 {
                     ring(progress: snapshot.thumbsUpProgress, symbol: "hand.thumbsup.fill", color: Theme.good)
                 }
                 if snapshot.handsUpProgress > 0.05 {
-                    ring(progress: snapshot.handsUpProgress, symbol: "hands.clap.fill", color: .white)
+                    ring(progress: snapshot.handsUpProgress, symbol: "figure.arms.open", color: .white)
                 }
                 Spacer()
             }
             .padding(10)
+            Spacer()
         }
     }
 

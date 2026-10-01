@@ -420,7 +420,7 @@ final class CanyonRunGame: SceneGame {
         hud.set { $0.stat = "Coins \(coins)" }
         let sparkle = SCNNode()
         sparkle.position = node.position
-        sparkle.addParticleSystem(WorldKit.burst(color: NSColor(calibratedRed: 1, green: 0.85, blue: 0.3, alpha: 1), count: 25, speed: 3, size: 0.1))
+        sparkle.addParticleSystem(WorldKit.burst(color: NSColor(calibratedRed: 1, green: 0.85, blue: 0.4, alpha: 0.8), count: 10, speed: 2.5, size: 0.05))
         scene.rootNode.addChildNode(sparkle)
         sparkle.runAction(.sequence([.wait(duration: 1.2), .removeFromParentNode()]))
         node.opacity = 0

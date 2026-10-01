@@ -12,21 +12,21 @@ final class FruitFrenzyGame: SpriteGame {
     }
 
     private final class Blade {
-        let cursor = SKShapeNode(circleOfRadius: 16)
+        let cursor = SKShapeNode(circleOfRadius: 11)
         let trail = SKShapeNode()
         var points: [(CGPoint, TimeInterval)] = []
         var position: CGPoint?
         var speed: CGFloat = 0
 
         init(color: NSColor) {
-            cursor.fillColor = color.withAlphaComponent(0.85)
+            cursor.fillColor = color
             cursor.strokeColor = .white
-            cursor.lineWidth = 3
-            cursor.glowWidth = 10
+            cursor.lineWidth = 2.5
+            cursor.glowWidth = 0
             cursor.zPosition = 50
             trail.strokeColor = NSColor.white.withAlphaComponent(0.9)
-            trail.lineWidth = 9
-            trail.glowWidth = 6
+            trail.lineWidth = 7
+            trail.glowWidth = 2
             trail.lineCap = .round
             trail.lineJoin = .round
             trail.zPosition = 49
@@ -151,6 +151,11 @@ final class FruitFrenzyGame: SpriteGame {
             }
             blade.position = p
         }
+    }
+
+    /// Throws a handful of fruit at once (used for screenshots).
+    func showcase() {
+        for i in 0..<5 { run(.wait(forDuration: Double(i) * 0.08)) { [weak self] in self?.launch(bomb: i == 4) } }
     }
 
     // MARK: - Spawning

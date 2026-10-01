@@ -9,19 +9,24 @@ struct MenuView: View {
         ZStack {
             Theme.background.ignoresSafeArea()
             VStack(alignment: .leading, spacing: 0) {
-                topBar
-                    .padding(.horizontal, 36)
-                    .padding(.top, 24)
-                Spacer(minLength: 16)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Games")
-                        .font(Theme.title(30))
-                        .foregroundStyle(.white)
-                    Text("Step left or right to choose. Thumbs up to play.")
-                        .font(Theme.body(15))
-                        .foregroundStyle(Theme.secondary)
+                // Leave the top-right corner to the live camera view.
+                VStack(alignment: .leading, spacing: 0) {
+                    topBar
+                    Spacer(minLength: 16)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Games")
+                            .font(Theme.title(30))
+                            .foregroundStyle(.white)
+                        Text("Step left or right to choose. Thumbs up to play.")
+                            .font(Theme.body(15))
+                            .foregroundStyle(Theme.secondary)
+                    }
                 }
-                .padding(.horizontal, 36)
+                .padding(.leading, 36)
+                .padding(.trailing, 360)
+                .padding(.top, 24)
+                .frame(height: 200, alignment: .top)
+                Spacer(minLength: 0)
                 carousel
                 Spacer(minLength: 16)
                 Divider().overlay(Theme.hairline)
@@ -190,7 +195,7 @@ struct HintBar: View {
         HStack(spacing: 28) {
             GestureHint(symbol: "figure.walk", title: "Step left or right", detail: "Choose a game")
             GestureHint(symbol: "hand.thumbsup.fill", title: "Thumbs up", detail: "Play")
-            GestureHint(symbol: "hands.clap.fill", title: "Both hands up", detail: "Pause or go back")
+            GestureHint(symbol: "figure.arms.open", title: "Both hands up", detail: "Pause or go back")
             Spacer()
             Text("Keyboard: arrow keys, Space, Esc")
                 .font(Theme.body(12))

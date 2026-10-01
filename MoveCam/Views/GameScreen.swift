@@ -172,7 +172,7 @@ struct WaitingOverlay: View {
                 .frame(maxWidth: 440)
             HStack(spacing: 28) {
                 GestureHint(symbol: "hand.thumbsup.fill", title: "Thumbs up", detail: "Start now")
-                GestureHint(symbol: "hands.clap.fill", title: "Both hands up", detail: "Back to menu")
+                GestureHint(symbol: "figure.arms.open", title: "Both hands up", detail: "Back to menu")
             }
             .padding(.top, 4)
         }
@@ -206,7 +206,7 @@ struct PauseOverlay: View {
             Text("Paused").font(Theme.title(34))
             HStack(spacing: 14) {
                 ChoiceButton(symbol: "hand.thumbsup.fill", title: "Resume", gesture: "Thumbs up", fill: Theme.good) { app.resume() }
-                ChoiceButton(symbol: "hands.clap.fill", title: "Main Menu", gesture: "Both hands up", fill: Theme.raised) { app.backToMenu() }
+                ChoiceButton(symbol: "figure.arms.open", title: "Main Menu", gesture: "Both hands up", fill: Theme.raised) { app.backToMenu() }
             }
         }
     }
@@ -239,7 +239,7 @@ struct GameOverOverlay: View {
             }
             HStack(spacing: 14) {
                 ChoiceButton(symbol: "hand.thumbsup.fill", title: "Play Again", gesture: "Thumbs up", fill: Theme.good) { app.replay() }
-                ChoiceButton(symbol: "hands.clap.fill", title: "Main Menu", gesture: "Both hands up", fill: Theme.raised) { app.backToMenu() }
+                ChoiceButton(symbol: "figure.arms.open", title: "Main Menu", gesture: "Both hands up", fill: Theme.raised) { app.backToMenu() }
             }
             .padding(.top, 8)
         }

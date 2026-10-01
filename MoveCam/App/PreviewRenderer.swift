@@ -49,6 +49,7 @@ enum PreviewRenderer {
             session.start()
             hub.keyboardStep(1)
             DispatchQueue.main.asyncAfter(deadline: .now() + 4.6) { hub.keyboardJump() }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) { (session as? FruitFrenzyGame)?.showcase() }
             DispatchQueue.main.asyncAfter(deadline: .now() + 6.0) {
                 if let image = capture(session) {
                     shots[info.id] = image
