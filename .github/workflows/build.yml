@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
@@ -49,13 +49,3 @@ jobs:
           path: previews
           if-no-files-found: warn
 
-      - name: Publish previews to ci-previews branch
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/claude/')
-        run: |
-          [ -d previews ] || exit 0
-          cd previews
-          git init -q -b ci-previews
-          git config user.name "github-actions"
-          git config user.email "github-actions@users.noreply.github.com"
-          git add -A && git commit -qm "Game previews for ${GITHUB_SHA}"
-          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" ci-previews
