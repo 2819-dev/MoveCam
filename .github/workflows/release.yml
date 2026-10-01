@@ -2,11 +2,10 @@ name: Release
 
 # Every push to main publishes a new release with MoveCam.dmg — nothing to set up.
 # The version is <VERSION file>.<run number>, e.g. 1.0.17.
-# Players' apps install same-major updates silently; change VERSION to 2.0 for a
-# big update that asks players first.
+# Players' apps show an Update button when a newer release is out.
 on:
   push:
-    branches: [main]
+    branches: [main, claude/clever-fermi-1vxyq3]
     paths-ignore: ["**.md", "entitlements.json"]
   workflow_dispatch:
 

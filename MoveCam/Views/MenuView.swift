@@ -59,6 +59,7 @@ struct MenuView: View {
             }
             .buttonStyle(FlatButtonStyle())
             .help("Settings")
+            UpdateButton()
             Spacer()
         }
     }

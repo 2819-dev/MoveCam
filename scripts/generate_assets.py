@@ -157,47 +157,50 @@ def make_sounds():
 
 
 def make_icon():
+    """A play button in motion: white triangle with speed streaks on a warm squircle."""
     os.makedirs(ICONSET, exist_ok=True)
-    S = 1024
+    SS = 4                      # supersample for smooth edges
+    S = 1024 * SS
     img = Image.new("RGBA", (S, S), (0, 0, 0, 0))
-    # Squircle background with vertical gradient.
-    grad = Image.new("RGBA", (S, S))
-    top, bottom = np.array([255, 94, 58]), np.array([156, 39, 176])
+
+    # Background squircle (macOS icon grid: 824px body, ~185px corners) with a gentle vertical gradient.
+    top, bottom = np.array([255, 122, 48]), np.array([232, 62, 40])
+    t_ = np.linspace(0, 1, S)[:, None]
+    grad = (top + (bottom - top) * t_).astype(np.uint8)
     arr = np.zeros((S, S, 4), dtype=np.uint8)
-    for y in range(S):
-        c = top + (bottom - top) * (y / S)
-        arr[y, :, :3] = c
-        arr[y, :, 3] = 255
-    grad = Image.fromarray(arr, "RGBA")
+    arr[:, :, :3] = grad[:, None, :]
+    arr[:, :, 3] = 255
+    body = Image.fromarray(arr, "RGBA")
     mask = Image.new("L", (S, S), 0)
-    ImageDraw.Draw(mask).rounded_rectangle((100, 100, 924, 924), radius=185, fill=255)
-    img.paste(grad, (0, 0), mask)
+    m = 100 * SS
+    ImageDraw.Draw(mask).rounded_rectangle((m, m, S - m, S - m), radius=185 * SS, fill=255)
+    # Soft drop shadow under the squircle.
+    shadow = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+    ImageDraw.Draw(shadow).rounded_rectangle((m, m + 14 * SS, S - m, S - m + 14 * SS), radius=185 * SS, fill=(0, 0, 0, 90))
+    shadow = shadow.filter(ImageFilter.GaussianBlur(18 * SS))
+    img = Image.alpha_composite(img, shadow)
+    img.paste(body, (0, 0), mask)
+
     d = ImageDraw.Draw(img)
-    # Soft glow circle.
-    glow = Image.new("RGBA", (S, S), (0, 0, 0, 0))
-    ImageDraw.Draw(glow).ellipse((260, 230, 764, 734), fill=(255, 255, 255, 70))
-    glow = glow.filter(ImageFilter.GaussianBlur(40))
-    img = Image.alpha_composite(img, Image.composite(glow, Image.new("RGBA", (S, S)), mask))
-    d = ImageDraw.Draw(img)
-    # Jumping stick figure.
     white = (255, 255, 255, 255)
-    w = 46
-    d.ellipse((462, 238, 562, 338), fill=white)                    # head
-    d.line((512, 350, 512, 560), fill=white, width=w + 8)          # torso
-    d.line((512, 400, 380, 300), fill=white, width=w)              # left arm up
-    d.line((512, 400, 644, 300), fill=white, width=w)              # right arm up
-    d.line((512, 555, 410, 650), fill=white, width=w)              # left thigh
-    d.line((410, 650, 440, 760), fill=white, width=w)              # left shin
-    d.line((512, 555, 614, 650), fill=white, width=w)              # right thigh
-    d.line((614, 650, 584, 760), fill=white, width=w)              # right shin
-    for (x, y) in [(380, 300), (644, 300), (410, 650), (614, 650), (512, 555), (512, 400)]:
-        d.ellipse((x - w / 2, y - w / 2, x + w / 2, y + w / 2), fill=white)
-    # Tracking corner brackets (camera framing), green.
-    green = (80, 255, 140, 255)
-    L, bw = 110, 30
-    for (cx, cy, sx, sy) in [(200, 200, 1, 1), (824, 200, -1, 1), (200, 824, 1, -1), (824, 824, -1, -1)]:
-        d.line((cx, cy, cx + sx * L, cy), fill=green, width=bw)
-        d.line((cx, cy, cx, cy + sy * L), fill=green, width=bw)
+    # Play triangle with rounded corners: draw the triangle, then round it by stroking its edges.
+    cx, cy = 560 * SS, 512 * SS
+    h = 300 * SS
+    tri = [(cx - h * 0.5, cy - h * 0.58), (cx - h * 0.5, cy + h * 0.58), (cx + h * 0.55, cy)]
+    d.polygon(tri, fill=white)
+    r = 34 * SS
+    d.line(tri + [tri[0]], fill=white, width=2 * r, joint="curve")
+    for (x, y) in tri:
+        d.ellipse((x - r, y - r, x + r, y + r), fill=white)
+    # Speed streaks to the left, shorter and fainter further out.
+    streaks = [(cy - 120 * SS, 130, 255), (cy, 200, 255), (cy + 120 * SS, 130, 255)]
+    for (y, length, alpha) in streaks:
+        x1 = cx - h * 0.5 - 70 * SS
+        x0 = x1 - length * SS
+        w = 44 * SS
+        d.rounded_rectangle((x0, y - w / 2, x1, y + w / 2), radius=w / 2, fill=(255, 255, 255, alpha))
+
+    img = img.resize((1024, 1024), Image.LANCZOS)
     images = []
     for size in (16, 32, 128, 256, 512):
         for scale in (1, 2):
@@ -212,6 +215,8 @@ def make_icon():
 
 
 if __name__ == "__main__":
-    make_sounds()
+    import sys
+    if "--icon-only" not in sys.argv:
+        make_sounds()
     make_icon()
     print("Generated sounds and icon.")

@@ -1,7 +1,13 @@
 import SwiftUI
 
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    /// Closing the game window quits MoveCam, like most games.
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+}
+
 @main
 struct MoveCamApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var hub: MotionHub
     @StateObject private var camera: CameraManager
     @StateObject private var entitlements: EntitlementService
@@ -33,7 +39,6 @@ struct MoveCamApp: App {
         .commands {
             CommandGroup(after: .appInfo) {
                 Button("Check for Updates…") { updater.checkForUpdates() }
-                    .disabled(!updater.canCheckForUpdates)
             }
             ModeratorCommands()
         }

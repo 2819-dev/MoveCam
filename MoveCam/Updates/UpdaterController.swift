@@ -1,44 +1,56 @@
 import AppKit
+import Combine
 import Foundation
 
-/// Keeps MoveCam up to date from GitHub Releases, no signing keys needed.
-///
-/// - Same major version (1.0.4 → 1.2.0): the new app downloads quietly in the
-///   background and replaces this one when MoveCam quits, so the next launch is updated.
-/// - New major version (1.x → 2.0): the player is asked first.
+/// Checks GitHub Releases for a newer MoveCam. When one exists, the menu shows an
+/// update button; pressing Download & Install fetches it, swaps the app and relaunches.
 @MainActor
 final class UpdaterController: ObservableObject {
-    @Published private(set) var canCheckForUpdates = true
-    @Published private(set) var status: String?
-    @Published var automaticallyUpdates: Bool {
-        didSet { UserDefaults.standard.set(automaticallyUpdates, forKey: Self.autoKey) }
+    struct AvailableUpdate: Equatable {
+        let version: String
+        let zipURL: URL
+        let dmgURL: URL?
+        let pageURL: URL
     }
 
-    /// False for builds that can't replace themselves (dev builds, or not copied to Applications yet).
-    var isConfigured: Bool { AppConfig.version != "dev" && !isTranslocated }
+    enum Phase: Equatable {
+        case idle
+        case checking
+        case downloading(Double)
+        case installing
+        case failed(String)
+    }
 
-    private static let autoKey = "autoInstallUpdates"
-    private static let skippedKey = "skippedMajorVersion"
-    private var stagedApp: URL?
-    private var stagedVersion: String?
+    @Published private(set) var available: AvailableUpdate?
+    @Published private(set) var phase: Phase = .idle
+    @Published private(set) var lastChecked: Date?
+
+    var canCheckForUpdates: Bool { phase == .idle || isFailed }
+    var isBusy: Bool {
+        switch phase {
+        case .downloading, .installing, .checking: return true
+        default: return false
+        }
+    }
+
+    /// The app can replace itself only when it lives somewhere writable
+    /// (e.g. Applications) and isn't running from the disk image.
+    var canSelfInstall: Bool {
+        let path = Bundle.main.bundlePath
+        return !path.contains("/AppTranslocation/") && !path.hasPrefix("/Volumes/")
+            && FileManager.default.isWritableFile(atPath: Bundle.main.bundleURL.deletingLastPathComponent().path)
+    }
+
+    private var isFailed: Bool { if case .failed = phase { return true } else { return false } }
     private var timer: Timer?
-    private var terminateObserver: NSObjectProtocol?
+    private var progressObservation: NSKeyValueObservation?
 
     init() {
-        UserDefaults.standard.register(defaults: [Self.autoKey: true])
-        automaticallyUpdates = UserDefaults.standard.bool(forKey: Self.autoKey)
-        terminateObserver = NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.installStagedUpdate(relaunch: false) }
+        guard PreviewRenderer.outputDirectory == nil, AppConfig.version != "dev" else { return }
+        Task { await check() }
+        timer = Timer.scheduledTimer(withTimeInterval: 3 * 3600, repeats: true) { [weak self] _ in
+            Task { await self?.check() }
         }
-        guard isConfigured, PreviewRenderer.outputDirectory == nil else { return }
-        Task { await check(userInitiated: false) }
-        timer = Timer.scheduledTimer(withTimeInterval: 6 * 3600, repeats: true) { [weak self] _ in
-            Task { await self?.check(userInitiated: false) }
-        }
-    }
-
-    func checkForUpdates() {
-        Task { await check(userInitiated: true) }
     }
 
     // MARK: - Checking
@@ -53,116 +65,136 @@ final class UpdaterController: ObservableObject {
         let assets: [Asset]
     }
 
-    private func check(userInitiated: Bool) async {
-        guard canCheckForUpdates else { return }
-        canCheckForUpdates = false
-        defer { canCheckForUpdates = true }
-        if userInitiated { status = "Checking…" }
+    /// Returns true if the check reached GitHub.
+    @discardableResult
+    func check() async -> Bool {
+        guard !isBusy else { return false }
+        phase = .checking
+        defer { if phase == .checking { phase = .idle } }
 
         var request = URLRequest(url: URL(string: "https://api.github.com/repos/\(AppConfig.repoOwner)/\(AppConfig.repoName)/releases/latest")!)
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+        request.setValue("MoveCam/\(AppConfig.version)", forHTTPHeaderField: "User-Agent")
         request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.timeoutInterval = 20
         guard let (data, response) = try? await URLSession.shared.data(for: request),
               (response as? HTTPURLResponse)?.statusCode == 200,
               let release = try? JSONDecoder().decode(Release.self, from: data) else {
-            if userInitiated { status = "Couldn't reach GitHub. Try again later." }
-            return
+            return false
         }
+        lastChecked = Date()
         let latest = release.tag_name.hasPrefix("v") ? String(release.tag_name.dropFirst()) : release.tag_name
-        guard Version(latest) > Version(AppConfig.version) else {
-            if userInitiated { status = "You're up to date (\(AppConfig.version))." }
-            return
+        guard Version(latest) > Version(AppConfig.version),
+              let zip = release.assets.first(where: { $0.name.hasPrefix("MoveCam-") && $0.name.hasSuffix(".zip") }) else {
+            available = nil
+            return true
         }
-        if stagedVersion == latest {
-            if userInitiated { status = "MoveCam \(latest) is ready — it installs when you quit." }
-            return
-        }
-        guard let zip = release.assets.first(where: { $0.name.hasPrefix("MoveCam-") && $0.name.hasSuffix(".zip") }) else { return }
-
-        let isMajor = Version(latest).major > Version(AppConfig.version).major
-        if isMajor {
-            if !userInitiated, UserDefaults.standard.string(forKey: Self.skippedKey) == latest { return }
-            askToInstallMajor(latest, zip: zip.browser_download_url, page: release.html_url)
-        } else if automaticallyUpdates || userInitiated {
-            if userInitiated { status = "Downloading MoveCam \(latest)…" }
-            if await stage(zip.browser_download_url, version: latest) {
-                status = "MoveCam \(latest) is ready — it installs when you quit."
-            } else if userInitiated {
-                status = "The update couldn't be downloaded. You can get it from GitHub Releases."
-            }
-        } else if userInitiated {
-            status = "MoveCam \(latest) is available."
-        }
+        available = AvailableUpdate(version: latest,
+                                    zipURL: zip.browser_download_url,
+                                    dmgURL: release.assets.first(where: { $0.name == "MoveCam.dmg" })?.browser_download_url,
+                                    pageURL: release.html_url)
+        return true
     }
 
-    private func askToInstallMajor(_ version: String, zip: URL, page: URL) {
-        let alert = NSAlert()
-        alert.messageText = "MoveCam \(version) is here"
-        alert.informativeText = "This is a big update. Install it now? MoveCam will restart."
-        alert.addButton(withTitle: "Install & Restart")
-        alert.addButton(withTitle: "Later")
-        alert.addButton(withTitle: "What's New")
-        switch alert.runModal() {
-        case .alertFirstButtonReturn:
-            Task {
-                status = "Downloading MoveCam \(version)…"
-                if await stage(zip, version: version) {
-                    installStagedUpdate(relaunch: true)
-                    NSApp.terminate(nil)
-                } else {
-                    NSWorkspace.shared.open(page)
-                }
+    /// Menu bar "Check for Updates…": always tells the player what happened.
+    func checkForUpdates() {
+        Task {
+            let reached = await check()
+            let alert = NSAlert()
+            if let update = available {
+                alert.messageText = "MoveCam \(update.version) is available"
+                alert.informativeText = "You have \(AppConfig.version). Download and install it now? MoveCam will restart."
+                alert.addButton(withTitle: canSelfInstall ? "Download & Install" : "Download")
+                alert.addButton(withTitle: "Later")
+                if alert.runModal() == .alertFirstButtonReturn { install() }
+            } else if reached {
+                alert.messageText = "You're up to date"
+                alert.informativeText = "MoveCam \(AppConfig.version) is the newest version."
+                alert.runModal()
+            } else {
+                alert.messageText = "Couldn't check for updates"
+                alert.informativeText = "MoveCam couldn't reach GitHub. Check your internet connection and try again."
+                alert.runModal()
             }
-        case .alertThirdButtonReturn:
-            NSWorkspace.shared.open(page)
-        default:
-            UserDefaults.standard.set(version, forKey: Self.skippedKey)
         }
     }
 
     // MARK: - Installing
 
-    /// Downloads and unpacks the new app next to the cache. Returns true when ready.
-    private func stage(_ url: URL, version: String) async -> Bool {
-        guard let (file, response) = try? await URLSession.shared.download(from: url),
-              (response as? HTTPURLResponse)?.statusCode == 200 else { return false }
-        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("MoveCamUpdate-\(version)", isDirectory: true)
-        try? FileManager.default.removeItem(at: dir)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let zip = dir.appendingPathComponent("update.zip")
-        guard (try? FileManager.default.moveItem(at: file, to: zip)) != nil,
-              run("/usr/bin/ditto", ["-x", "-k", zip.path, dir.path]) else { return false }
-        let app = dir.appendingPathComponent("MoveCam.app")
-        // Make sure it really is MoveCam at the expected version.
-        guard let info = NSDictionary(contentsOf: app.appendingPathComponent("Contents/Info.plist")),
-              info["CFBundleIdentifier"] as? String == Bundle.main.bundleIdentifier,
-              info["CFBundleShortVersionString"] as? String == version else { return false }
-        stagedApp = app
-        stagedVersion = version
-        return true
+    func install() {
+        guard let update = available, !isBusy else { return }
+        guard canSelfInstall else {
+            // Running from the disk image or a read-only spot: hand over the new DMG instead.
+            NSWorkspace.shared.open(update.dmgURL ?? update.pageURL)
+            return
+        }
+        phase = .downloading(0)
+        let task = URLSession.shared.downloadTask(with: update.zipURL) { [weak self] file, response, error in
+            // The temporary file disappears when this handler returns, so move it now.
+            var saved: URL?
+            if let file, (response as? HTTPURLResponse)?.statusCode == 200 {
+                let dest = FileManager.default.temporaryDirectory.appendingPathComponent("MoveCam-\(update.version)-\(UUID().uuidString).zip")
+                if (try? FileManager.default.moveItem(at: file, to: dest)) != nil { saved = dest }
+            }
+            Task { @MainActor in self?.finishDownload(saved, update: update) }
+        }
+        progressObservation = task.progress.observe(\.fractionCompleted) { [weak self] progress, _ in
+            let fraction = progress.fractionCompleted
+            Task { @MainActor in
+                if case .downloading = self?.phase { self?.phase = .downloading(fraction) }
+            }
+        }
+        task.resume()
     }
 
-    /// Swaps the staged app into place once this process exits.
-    private func installStagedUpdate(relaunch: Bool) {
-        guard let staged = stagedApp, FileManager.default.fileExists(atPath: staged.path) else { return }
-        let target = Bundle.main.bundleURL
-        guard FileManager.default.isWritableFile(atPath: target.deletingLastPathComponent().path) else { return }
-        stagedApp = nil
+    private func finishDownload(_ zip: URL?, update: AvailableUpdate) {
+        progressObservation = nil
+        guard let zip else {
+            phase = .failed("The download didn't finish. Check your connection and try again.")
+            return
+        }
+        phase = .installing
+        let dir = zip.deletingLastPathComponent().appendingPathComponent("MoveCamUpdate-\(UUID().uuidString)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let app = dir.appendingPathComponent("MoveCam.app")
+        guard run("/usr/bin/ditto", ["-x", "-k", zip.path, dir.path]),
+              let info = NSDictionary(contentsOf: app.appendingPathComponent("Contents/Info.plist")),
+              info["CFBundleIdentifier"] as? String == Bundle.main.bundleIdentifier else {
+            phase = .failed("The update file looks damaged. You can download it from GitHub instead.")
+            return
+        }
+
+        let target = Bundle.main.bundleURL.path
         let pid = ProcessInfo.processInfo.processIdentifier
+        // Wait for MoveCam to quit, swap the app, then open the new one.
         let script = """
-        while kill -0 \(pid) 2>/dev/null; do sleep 0.3; done
-        rm -rf "\(target.path).old"
-        mv "\(target.path)" "\(target.path).old" && mv "\(staged.path)" "\(target.path)" && rm -rf "\(target.path).old" || mv "\(target.path).old" "\(target.path)"
-        xattr -dr com.apple.quarantine "\(target.path)" 2>/dev/null
-        \(relaunch ? "open \"\(target.path)\"" : "")
+        while kill -0 \(pid) 2>/dev/null; do sleep 0.2; done
+        rm -rf "\(target).old"
+        if mv "\(target)" "\(target).old" && ditto "\(app.path)" "\(target)"; then
+          rm -rf "\(target).old"
+        else
+          rm -rf "\(target)"; mv "\(target).old" "\(target)"
+        fi
+        xattr -dr com.apple.quarantine "\(target)" 2>/dev/null
+        open "\(target)"
         """
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/sh")
         process.arguments = ["-c", script]
-        try? process.run()
+        let log = FileManager.default.temporaryDirectory.appendingPathComponent("movecam-update.log")
+        FileManager.default.createFile(atPath: log.path, contents: nil)
+        if let handle = try? FileHandle(forWritingTo: log) {
+            process.standardOutput = handle
+            process.standardError = handle
+        }
+        do {
+            try process.run()
+        } catch {
+            phase = .failed("Couldn't start the installer. You can download the update from GitHub instead.")
+            return
+        }
+        NSApp.terminate(nil)
     }
-
-    private var isTranslocated: Bool { Bundle.main.bundlePath.contains("/AppTranslocation/") }
 
     private func run(_ tool: String, _ args: [String]) -> Bool {
         let p = Process()
@@ -181,8 +213,6 @@ struct Version: Comparable {
     init(_ string: String) {
         parts = string.split(separator: ".").map { Int($0) ?? 0 }
     }
-
-    var major: Int { parts.first ?? 0 }
 
     static func < (a: Version, b: Version) -> Bool {
         for i in 0..<max(a.parts.count, b.parts.count) {

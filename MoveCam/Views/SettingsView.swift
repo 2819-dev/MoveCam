@@ -83,22 +83,17 @@ private struct UpdateSettings: View {
 
     var body: some View {
         Form {
-            LabeledContent("Version", value: "\(AppConfig.version) (\(AppConfig.build))")
-            if updater.isConfigured {
-                Toggle("Install updates automatically", isOn: $updater.automaticallyUpdates)
-                Text("Small updates download quietly in the background and apply the next time MoveCam opens. Big (major) updates always ask first.")
-                    .font(.caption).foregroundStyle(.secondary)
-                HStack {
-                    Button("Check for Updates…") { updater.checkForUpdates() }
-                        .disabled(!updater.canCheckForUpdates)
-                    if let status = updater.status {
-                        Text(status).font(.caption).foregroundStyle(.secondary)
-                    }
-                }
-            } else {
-                Text("Move MoveCam into your Applications folder to turn on automatic updates.")
+            LabeledContent("Version", value: AppConfig.version)
+            if let update = updater.available {
+                LabeledContent("Available", value: update.version)
+                Button(updater.canSelfInstall ? "Download & Install" : "Download") { updater.install() }
+                    .disabled(updater.isBusy)
+            } else if let checked = updater.lastChecked {
+                Text("You're up to date. Last checked \(checked.formatted(date: .omitted, time: .shortened)).")
                     .font(.caption).foregroundStyle(.secondary)
             }
+            Button("Check for Updates…") { updater.checkForUpdates() }
+                .disabled(updater.isBusy)
             Link("Open GitHub Releases", destination: AppConfig.releasesURL)
         }
         .formStyle(.grouped)

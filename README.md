@@ -58,18 +58,17 @@ Grants are stored in [`entitlements.json`](entitlements.json) on `main`. Players
 
 ## Updates
 
-MoveCam updates itself from GitHub Releases. There are no keys or accounts to set up.
+MoveCam checks GitHub Releases when it opens, and every few hours after that.
 
-- **Small updates** download quietly in the background and install when MoveCam quits, so the next launch is already updated.
-- **Big updates** (a new major version, like 1.x → 2.0) ask the player first.
-- Players can turn automatic installs off, or check by hand, in **Settings → Updates** or **MoveCam → Check for Updates…**.
-- Updates only work once MoveCam is in the **Applications** folder.
+- When a newer version is out, an orange **Update** button appears in the top bar of the menu. Click it, then click **Download & Install**. MoveCam downloads the update, closes, swaps itself for the new version and reopens.
+- **MoveCam → Check for Updates…** checks right away and tells you what it found.
+- If MoveCam isn't in your **Applications** folder (for example, you're running it straight from the disk image), the button downloads the new `MoveCam.dmg` instead.
 
 ## Publishing a release
 
 Nothing to configure. **Every push to `main` builds MoveCam on a Mac runner and publishes a new release** with `MoveCam.dmg`. You can also run the **Release** workflow by hand from the Actions tab.
 
-Versions are automatic: the [`VERSION`](VERSION) file plus a build number, e.g. `1.0.17`. To ship a big update that asks players before installing, change `VERSION` to `2.0`.
+Versions are automatic: the [`VERSION`](VERSION) file plus a build number, e.g. `1.0.17`. Change `VERSION` (say to `1.1` or `2.0`) when you want the version number to jump.
 
 The download link always points at the newest build: `https://github.com/2819-dev/MoveCam/releases/latest/download/MoveCam.dmg`
 
