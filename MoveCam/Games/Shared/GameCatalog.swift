@@ -22,6 +22,14 @@ struct GameInfo: Identifiable {
                  moves: ["Step left / right to switch lanes", "Jump over hurdles", "Crouch under bridges"],
                  symbol: "figure.run", colors: [Color(red: 1, green: 0.55, blue: 0.25), Color(red: 0.75, green: 0.2, blue: 0.35)],
                  isPro: false, pauseHold: 1.0, make: { CanyonRunGame(hub: $0) }),
+        GameInfo(id: .fruitFrenzy, title: "Fruit Frenzy", tagline: "Your hands are blades",
+                 moves: ["Swipe fast through flying fruit", "Slice several at once for combos", "Don't touch the bombs!"],
+                 symbol: "leaf.fill", colors: [Color(red: 0.35, green: 0.8, blue: 0.3), Color(red: 0.95, green: 0.3, blue: 0.35)],
+                 isPro: false, pauseHold: 2.0, make: { FruitFrenzyGame(hub: $0) }),
+        GameInfo(id: .penaltySave, title: "Penalty Save", tagline: "Be the hero under the floodlights",
+                 moves: ["Reach with your hands to save shots", "Step sideways to cover the goal", "Build a streak for bonus points"],
+                 symbol: "figure.soccer", colors: [Color(red: 0.15, green: 0.6, blue: 0.3), Color(red: 0.1, green: 0.2, blue: 0.5)],
+                 isPro: false, pauseHold: 2.0, make: { PenaltySaveGame(hub: $0) }),
     ]
 
     static func info(_ id: GameID) -> GameInfo { all.first { $0.id == id }! }
