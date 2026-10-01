@@ -10,13 +10,15 @@ struct SettingsView: View {
             UpdateSettings()
                 .tabItem { Label("Updates", systemImage: "arrow.down.circle") }
         }
-        .frame(width: 520, height: 340)
+        .frame(width: 540, height: 420)
     }
 }
 
 private struct GeneralSettings: View {
     @EnvironmentObject var camera: CameraManager
     @AppStorage(SoundManager.enabledKey) private var soundEnabled = true
+    @AppStorage(MusicPlayer.enabledKey) private var musicEnabled = true
+    @AppStorage(MusicPlayer.volumeKey) private var musicVolume = 0.6
     @AppStorage("showSkeleton") private var showSkeleton = true
 
     var body: some View {
@@ -29,6 +31,16 @@ private struct GeneralSettings: View {
             Text("Plug in a USB webcam or use your iPhone as a Continuity Camera — it shows up here.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+            Toggle("Music", isOn: $musicEnabled)
+            if musicEnabled {
+                Slider(value: $musicVolume, in: 0...1) {
+                    Text("Music volume")
+                } minimumValueLabel: {
+                    Image(systemName: "speaker.fill")
+                } maximumValueLabel: {
+                    Image(systemName: "speaker.wave.3.fill")
+                }
+            }
             Toggle("Sound effects", isOn: $soundEnabled)
             Toggle("Show body tracking skeleton in the live view", isOn: $showSkeleton)
         }

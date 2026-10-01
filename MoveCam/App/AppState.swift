@@ -53,6 +53,9 @@ final class AppState: ObservableObject {
         tickTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.tick() }
         }
+        if PreviewRenderer.outputDirectory == nil {
+            MusicPlayer.shared.play("menu")
+        }
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self else { return event }
             return MainActor.assumeIsolated { self.handleKey(event) ? nil : event }
@@ -100,6 +103,7 @@ final class AppState: ObservableObject {
         hub.detectHands = true
         hub.handsUpHold = info.pauseHold
         hub.resetGestures()
+        MusicPlayer.shared.play(info.id.rawValue)
     }
 
     private func beginCountdown() {
@@ -136,6 +140,7 @@ final class AppState: ObservableObject {
             hub.detectHands = true
             hub.resetGestures()
             sound.play(.pause)
+            MusicPlayer.shared.duck(true)
             if let reason { showToast(reason) }
         default:
             break
@@ -145,6 +150,7 @@ final class AppState: ObservableObject {
     func resume() {
         guard phase == .paused else { return }
         hub.resetGestures()
+        MusicPlayer.shared.duck(false)
         beginCountdown()
     }
 
@@ -159,6 +165,7 @@ final class AppState: ObservableObject {
         hub.handsUpHold = 1.0
         hub.resetGestures()
         sound.play(.pause)
+        MusicPlayer.shared.play("menu")
     }
 
     func replay() {
@@ -173,6 +180,10 @@ final class AppState: ObservableObject {
         phase = .over(result, isBest: best)
         hub.detectHands = true
         hub.resetGestures()
+        MusicPlayer.shared.duck(true)
+        if best {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in self?.sound.play(.combo) }
+        }
     }
 
     // MARK: - Input

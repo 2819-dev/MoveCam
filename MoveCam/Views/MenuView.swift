@@ -59,6 +59,7 @@ struct MenuView: View {
             }
             .buttonStyle(FlatButtonStyle())
             .help("Settings")
+            MusicToggle()
             UpdateButton()
             Spacer()
         }
@@ -236,6 +237,21 @@ struct CameraPicker: View {
         .frame(height: 32)
         .background(Theme.raised, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .foregroundStyle(.white)
+    }
+}
+
+struct MusicToggle: View {
+    @AppStorage(MusicPlayer.enabledKey) private var musicEnabled = true
+
+    var body: some View {
+        Button {
+            musicEnabled.toggle()
+        } label: {
+            Image(systemName: musicEnabled ? "speaker.wave.2.fill" : "speaker.slash.fill")
+                .frame(width: 16)
+        }
+        .buttonStyle(FlatButtonStyle())
+        .help(musicEnabled ? "Turn music off" : "Turn music on")
     }
 }
 

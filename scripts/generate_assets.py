@@ -11,6 +11,8 @@ import os
 import wave
 
 import numpy as np
+import sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from PIL import Image, ImageDraw, ImageFilter
 
 RATE = 44100
@@ -78,82 +80,112 @@ def concat(*parts):
 
 
 def make_sounds():
+    """Sound effects built with scripts/dsp.py: layered, with short room reverb."""
+    import dsp
+    from dsp import (bell, clap, fft_filter, kick, marimba, midi, noise, pluck, reverb, secs, snare, tom)
     os.makedirs(SOUNDS, exist_ok=True)
-    # Coin: two bright blips.
-    a = tone(988, 0.07) * env(int(RATE * 0.07), release=0.02)
-    b = tone(1319, 0.22) * env(int(RATE * 0.22), release=0.2)
-    save("coin", concat(a, b), 0.6)
-    # Jump: rising sweep.
-    s = sweep(220, 880, 0.25, "tri")
-    save("jump", s * env(len(s), release=0.12), 0.55)
-    # Hit / stumble: low thud with noise.
-    n = lowpass(noise(0.35), 0.08) * np.exp(-t(0.35) * 12)
-    th = np.sin(2 * np.pi * 70 * t(0.35)) * np.exp(-t(0.35) * 9)
-    save("hit", n * 0.8 + th, 0.9)
-    # Slice: fast high noise sweep.
-    x = t(0.22)
-    n = noise(0.22)
-    n = n - lowpass(n, 0.25)
-    save("slice", n * np.sin(np.pi * x / 0.22) ** 2, 0.5)
-    # Splat: wet low noise.
-    n = lowpass(noise(0.3), 0.05) * np.exp(-t(0.3) * 10)
-    bub = np.sin(2 * np.pi * (180 - 400 * t(0.3)) * t(0.3)) * np.exp(-t(0.3) * 20)
-    save("splat", n + 0.5 * bub, 0.7)
-    # Explosion.
-    n = lowpass(noise(1.2), 0.04) * np.exp(-t(1.2) * 3.5)
-    boom = np.sin(2 * np.pi * 50 * t(1.2)) * np.exp(-t(1.2) * 5)
-    save("explosion", n + boom, 0.95)
-    # Whistle (referee).
-    x = t(0.45)
-    w = np.sin(2 * np.pi * (2700 + 120 * np.sin(2 * np.pi * 30 * x)) * x)
-    save("whistle", w * env(len(x), 0.02, 0.08) + 0.15 * noise(0.45) * env(len(x), 0.02, 0.08), 0.45)
-    # Kick: thump.
-    x = t(0.2)
-    k = np.sin(2 * np.pi * (150 * np.exp(-x * 25) + 50) * x) * np.exp(-x * 18)
-    save("kick", k + 0.2 * lowpass(noise(0.2), 0.3) * np.exp(-x * 40), 0.9)
-    # Save: glove smack + rising chime.
-    sm = lowpass(noise(0.12), 0.35) * np.exp(-t(0.12) * 35)
-    ch = tone(784, 0.3) * env(int(RATE * 0.3), release=0.25)
-    save("save", concat(sm, ch), 0.8)
-    # Crowd cheer.
-    x = t(1.8)
-    c = lowpass(noise(1.8), 0.12) - lowpass(noise(1.8), 0.01)
-    c = c * np.sin(np.pi * x / 1.8) ** 0.6 * (1 + 0.3 * np.sin(2 * np.pi * 3 * x))
-    save("cheer", c, 0.6)
-    # Crowd groan (goal against).
-    x = t(1.2)
-    g = lowpass(noise(1.2), 0.03) * np.sin(np.pi * x / 1.2)
-    g = g + 0.3 * np.sin(2 * np.pi * (220 - 80 * x) * x) * np.sin(np.pi * x / 1.2)
-    save("groan", g, 0.55)
-    # Punch.
-    x = t(0.18)
-    p = lowpass(noise(0.18), 0.2) * np.exp(-x * 30) + np.sin(2 * np.pi * 90 * x) * np.exp(-x * 20)
-    save("punch", p, 0.95)
-    # Beep / go / select.
-    save("beep", tone(880, 0.15) * env(int(RATE * 0.15), release=0.05), 0.5)
-    save("go", tone(1320, 0.4) * env(int(RATE * 0.4), release=0.3), 0.55)
-    s = tone(1200, 0.05, (1.0, 0.2)) * env(int(RATE * 0.05), release=0.03)
-    save("select", s, 0.4)
-    # Confirm: two-note up.
-    save("confirm", concat(tone(660, 0.08) * env(int(RATE * 0.08), release=0.02),
-                           tone(990, 0.2) * env(int(RATE * 0.2), release=0.15)), 0.5)
-    # Pause: two-note down.
-    save("pause", concat(tone(880, 0.1) * env(int(RATE * 0.1), release=0.03),
-                         tone(587, 0.22) * env(int(RATE * 0.22), release=0.15)), 0.5)
-    # Game over: descending arpeggio.
-    notes = [523, 440, 349, 262]
-    save("gameover", concat(*[tone(f, 0.18 if i < 3 else 0.6) * env(int(RATE * (0.18 if i < 3 else 0.6)), release=0.1 if i < 3 else 0.5)
-                              for i, f in enumerate(notes)]), 0.55)
-    # Gate (ski): airy chime.
-    save("gate", concat(tone(1046, 0.08, (1, 0.5, 0.2)) * env(int(RATE * 0.08), release=0.03),
-                        tone(1568, 0.25, (1, 0.5, 0.2)) * env(int(RATE * 0.25), release=0.2)), 0.45)
-    # Whoosh (ski / dodge).
-    x = t(0.5)
-    n = lowpass(noise(0.5), 0.15)
-    save("whoosh", n * np.sin(np.pi * x / 0.5) ** 2, 0.5)
-    # Combo fanfare.
-    notes = [523, 659, 784, 1046]
-    save("combo", concat(*[tone(f, 0.09, (1, 0.4, 0.2)) * env(int(RATE * 0.09), release=0.03) for f in notes]), 0.5)
+    R = dsp.SR
+
+    def out(name, mono, room=0.18, length=0.6, gain=0.85):
+        stereo = np.stack([mono, mono], axis=1)
+        wet = reverb(stereo, length, room, circular=False) if room else stereo
+        x = wet.mean(axis=1)
+        x = x / (np.max(np.abs(x)) + 1e-9) * gain
+        # Trim trailing silence.
+        idx = np.where(np.abs(x) > 0.002)[0]
+        x = x[: (idx[-1] + 1 if len(idx) else len(x))]
+        x = x * np.minimum(1, (len(x) - np.arange(len(x))) / (R * 0.01))
+        with wave.open(os.path.join(SOUNDS, name + ".wav"), "wb") as w:
+            w.setnchannels(1)
+            w.setsampwidth(2)
+            w.setframerate(R)
+            w.writeframes((x * 32767).astype(np.int16).tobytes())
+
+    def at(total, *parts):
+        buf = np.zeros(int(R * total))
+        for t0, sig, g in parts:
+            s0 = int(t0 * R)
+            n = min(len(sig), len(buf) - s0)
+            buf[s0:s0 + n] += sig[:n] * g
+        return buf
+
+    def sweep_noise(length, f0, f1, q=0.35):
+        t = secs(length)
+        n = noise(length)
+        out_ = np.zeros_like(n)
+        # Band-pass that moves from f0 to f1, done in short overlapping blocks.
+        block = 1024
+        win = np.hanning(block * 2)
+        for i in range(0, len(n) - block * 2, block):
+            frac = i / max(1, len(n) - block * 2)
+            fc = f0 * (f1 / f0) ** frac
+            seg = fft_filter(n[i:i + block * 2] * win, lo=fc * (1 - q), hi=fc * (1 + q))
+            out_[i:i + block * 2] += seg
+        return out_
+
+    # UI
+    out("select", marimba(midi(84), 0.25), room=0.1, length=0.4, gain=0.5)
+    out("confirm", at(0.6, (0, marimba(midi(76), 0.4), 0.8), (0.07, marimba(midi(83), 0.5), 1.0)), room=0.2, gain=0.6)
+    out("pause", at(0.6, (0, marimba(midi(79), 0.4), 1.0), (0.09, marimba(midi(72), 0.5), 0.9)), room=0.2, gain=0.6)
+    out("beep", bell(midi(81), 0.6), room=0.15, gain=0.55)
+    out("go", at(0.9, (0, bell(midi(88), 0.9), 1.0), (0, bell(midi(81), 0.9), 0.6)), room=0.25, gain=0.65)
+    out("combo", at(0.9, *[(i * 0.06, bell(midi(n), 0.6), 0.8) for i, n in enumerate([72, 76, 79, 84, 88])]), room=0.25, gain=0.6)
+    out("gameover", at(2.2, *[(i * 0.22, marimba(midi(n), 0.9), 1.0) for i, n in enumerate([76, 72, 69, 64])], (0.66, marimba(midi(52), 1.4), 0.7)), room=0.3, length=1.5, gain=0.65)
+
+    # Pickups and movement
+    out("coin", at(0.5, (0, bell(midi(88), 0.45), 0.8), (0.065, bell(midi(95), 0.45), 1.0)), room=0.15, gain=0.55)
+    out("gate", at(0.8, (0, bell(midi(84), 0.7), 0.8), (0.08, bell(midi(91), 0.7), 0.9)), room=0.3, gain=0.5)
+    t = secs(0.35)
+    boing = np.sin(2 * np.pi * np.cumsum(180 + 500 * (1 - np.exp(-t * 8))) / R) * np.exp(-t * 7)
+    out("jump", sweep_noise(0.35, 400, 2500) * np.sin(np.pi * t / 0.35) * 1.2 + boing * 0.25, room=0.1, gain=0.55)
+    t = secs(0.5)
+    out("whoosh", sweep_noise(0.5, 300, 1800) * np.sin(np.pi * t / 0.5) ** 1.5, room=0.15, gain=0.55)
+    t = secs(0.22)
+    out("slice", sweep_noise(0.22, 2500, 7000, 0.3) * np.sin(np.pi * t / 0.22) ** 0.7 + fft_filter(noise(0.22), lo=6000) * np.exp(-t * 30) * 0.3, room=0.08, gain=0.6)
+
+    # Impacts
+    t = secs(0.35)
+    squish = fft_filter(noise(0.35), lo=150, hi=1500) * np.exp(-t * 12) * (1 + 0.5 * np.sin(2 * np.pi * 35 * t))
+    out("splat", squish + np.sin(2 * np.pi * (300 - 400 * t) * t) * np.exp(-t * 25) * 0.4, room=0.12, gain=0.7)
+    t = secs(0.4)
+    out("hit", kick(0.8, 0.4) * 0.9 + fft_filter(noise(0.4), lo=200, hi=3000) * np.exp(-t * 18) * 0.6, room=0.15, gain=0.8)
+    t = secs(0.25)
+    out("punch", kick(1.0, 0.25) * 0.8 + fft_filter(noise(0.25), lo=500, hi=5000) * np.exp(-t * 45) * 0.9, room=0.12, gain=0.85)
+    t = secs(1.6)
+    boom = np.sin(2 * np.pi * np.cumsum(40 + 80 * np.exp(-t * 6)) / R) * np.exp(-t * 3)
+    crackle = fft_filter(noise(1.6), lo=800, hi=8000) * np.exp(-t * 2.5) * (rng.uniform(0, 1, len(t)) > 0.985) * 3
+    out("explosion", boom + fft_filter(noise(1.6), hi=1200) * np.exp(-t * 3) * 0.8 + crackle * 0.5, room=0.3, length=1.4, gain=0.9)
+
+    # Football
+    t = secs(0.25)
+    out("kick", kick(0.6, 0.25) * 0.7 + fft_filter(noise(0.25), lo=700, hi=4000) * np.exp(-t * 60) * 0.8, room=0.2, gain=0.8)
+    t = secs(0.5)
+    smack = fft_filter(noise(0.5), lo=400, hi=6000) * np.exp(-t * 40)
+    out("save", smack + tom(160, 0.5) * 0.4, room=0.2, gain=0.8)
+    t = secs(0.6)
+    trill = np.sin(2 * np.pi * (2900 + 180 * np.sign(np.sin(2 * np.pi * 28 * t))) * t)
+    out("whistle", (trill * 0.7 + fft_filter(noise(0.6), lo=2000, hi=5000) * 0.25) * dsp.env(len(t), a=0.02, r=0.08), room=0.35, length=1.2, gain=0.45)
+
+    # Crowds
+    def crowd(length, mood):
+        t_ = secs(length)
+        roar = fft_filter(noise(length), lo=250, hi=2800) * 0.5
+        r = np.random.default_rng(5)
+        buf = roar.copy()
+        for _ in range(70):
+            f = r.uniform(250, 800)
+            st = r.uniform(0, length * 0.6)
+            d = r.uniform(0.4, length - st)
+            tt = secs(d)
+            glide = (1 + (0.25 if mood == "cheer" else -0.2) * tt / d)
+            v = np.sin(2 * np.pi * np.cumsum(f * glide) / R) * np.sin(np.pi * tt / d) ** 2
+            v = fft_filter(v + 0.4 * rng.uniform(-1, 1, len(tt)), lo=250, hi=3500)
+            s0 = int(st * R)
+            buf[s0:s0 + len(v)] += v * 0.12
+        shape = np.sin(np.pi * np.clip(t_ / length, 0, 1)) ** (0.5 if mood == "cheer" else 1.2)
+        return buf * shape
+    out("cheer", crowd(2.2, "cheer"), room=0.4, length=1.5, gain=0.7)
+    out("groan", crowd(1.5, "groan"), room=0.4, length=1.2, gain=0.55)
 
 
 def make_icon():

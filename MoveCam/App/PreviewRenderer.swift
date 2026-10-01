@@ -16,6 +16,10 @@ enum PreviewRenderer {
 
     static func run(into dir: URL, app: AppState, mainView: @escaping () -> NSView?) {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let tracks = ["menu"] + GameInfo.all.map { $0.id.rawValue }
+        for (name, seconds) in MusicPlayer.shared.loadReport(tracks).sorted(by: { $0.key < $1.key }) {
+            print("[music] \(name): \(String(format: "%.1f", seconds))s")
+        }
         let hub = MotionHub()
         hub.simulateHands = true
         var remaining = GameInfo.all
