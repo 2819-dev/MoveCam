@@ -6,3 +6,5 @@ DerivedData/
 xcuserdata/
 dist/
 *.key
+web/node_modules/
+shots/

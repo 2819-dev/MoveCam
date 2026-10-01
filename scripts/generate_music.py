@@ -325,6 +325,11 @@ def write_m4a(name, audio):
         w.writeframes((audio * 32767).astype(np.int16).tobytes())
     dest = os.path.join(OUT, f"music-{name}.m4a")
     subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", path, "-c:a", "aac", "-b:a", "160k", dest], check=True)
+    # Ogg/Opus copy for browsers without AAC (web app only).
+    web = os.path.join(os.path.dirname(OUT), "..", "..", "web", "static", "music")
+    os.makedirs(web, exist_ok=True)
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", path, "-c:a", "libopus", "-b:a", "96k",
+                    os.path.join(web, f"music-{name}.ogg")], check=True)
     os.remove(path)
     return dest
 
