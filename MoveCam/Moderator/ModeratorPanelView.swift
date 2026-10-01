@@ -511,7 +511,8 @@ private struct ChangePasswordSheet: View {
 // MARK: - Formatting helpers
 
 private func gameTitle(_ raw: String) -> String {
-    GameID(rawValue: raw).map { GameInfo.info($0).title } ?? raw
+    ["canyonRun": "Canyon Run", "fruitFrenzy": "Fruit Frenzy", "penaltySave": "Penalty Save",
+     "alpineRush": "Alpine Rush", "boxingBlitz": "Boxing Blitz"][raw] ?? raw
 }
 
 private func relative(_ iso: String) -> String {

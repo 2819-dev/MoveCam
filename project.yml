@@ -16,6 +16,10 @@ targets:
     platform: macOS
     sources:
       - path: MoveCam
+      # The shared web game, built by `npm run build` in web/ (see README).
+      - path: MacWebApp/WebApp
+        type: folder
+        buildPhase: resources
     settings:
       base:
         PRODUCT_NAME: MoveCam

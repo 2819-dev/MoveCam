@@ -32,10 +32,10 @@ final class Analytics {
         }
     }
 
-    func log(_ type: String, game: GameID? = nil, score: Int? = nil, seconds: Double? = nil) {
+    func log(_ type: String, game: String? = nil, score: Int? = nil, seconds: Double? = nil) {
         guard isEnabled, userID != nil else { return }
         var event: [String: Any] = ["type": type, "t": ISODate.timestamp(Date())]
-        if let game { event["game"] = game.rawValue }
+        if let game { event["game"] = game }
         if let score { event["score"] = score }
         if let seconds { event["seconds"] = Int(seconds.rounded()) }
         queue.append(event)

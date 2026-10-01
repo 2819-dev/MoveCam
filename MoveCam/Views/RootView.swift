@@ -1,49 +1,65 @@
 import SwiftUI
 
+/// The whole window: the shared web game, with the native live camera view on top.
 struct RootView: View {
-    @EnvironmentObject var app: AppState
+    @EnvironmentObject var bridge: WebBridge
     @EnvironmentObject var camera: CameraManager
+    let hub: MotionHub
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            switch app.screen {
-            case .menu:
-                MenuView().transition(.opacity)
-            case .game:
-                GameScreen().transition(.opacity)
+            GameWebView(bridge: bridge)
+                .ignoresSafeArea()
+            if PreviewRenderer.outputDirectory == nil {
+                LiveView(hub: hub, camera: camera, width: 300)
+                    .padding(.top, 18)
+                    .padding(.trailing, 18)
+                    .allowsHitTesting(false)
             }
-            LiveView(hub: app.hub, camera: camera, width: 300)
-                .padding(20)
-        }
-        .overlay(alignment: .bottom) {
-            if let toast = app.toast {
-                Text(toast)
-                    .font(Theme.body(14, .semibold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 16)
-                    .frame(height: 38)
-                    .background(Theme.raised, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-                    .padding(.bottom, 30)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            if camera.authorization == .denied || camera.authorization == .restricted {
+                CameraPermissionCard()
             }
         }
-        .animation(.easeInOut(duration: 0.3), value: app.screen)
-        .animation(.easeInOut(duration: 0.3), value: app.toast)
         .frame(minWidth: 1100, minHeight: 720)
         .background(Theme.background)
         .background(WindowAccessor { window in
-            app.mainWindow = window
             window.title = "MoveCam"
             window.titlebarAppearsTransparent = true
-            window.backgroundColor = .black
+            window.backgroundColor = NSColor(Theme.background)
+            window.makeFirstResponder(bridge.webView)
         })
         .preferredColorScheme(.dark)
         .onAppear {
             if let dir = PreviewRenderer.outputDirectory {
-                PreviewRenderer.run(into: dir, app: app, mainView: { app.mainWindow?.contentView })
+                PreviewRenderer.run(into: dir, bridge: bridge)
             } else {
                 camera.start()
+                bridge.load()
             }
+        }
+    }
+}
+
+struct CameraPermissionCard: View {
+    @EnvironmentObject var camera: CameraManager
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.7).ignoresSafeArea()
+            VStack(spacing: 14) {
+                Image(systemName: "web.camera.fill").font(.system(size: 36)).foregroundStyle(Theme.secondary)
+                Text("Allow camera access").font(Theme.title(24))
+                Text("MoveCam needs your camera to see you move. Turn it on in System Settings → Privacy & Security → Camera, then reopen MoveCam. Video stays on your Mac.")
+                    .font(Theme.body(14))
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(Theme.secondary)
+                Button("Open System Settings") { camera.openPrivacySettings() }
+                    .buttonStyle(FlatButtonStyle(fill: Theme.accent))
+            }
+            .foregroundStyle(.white)
+            .padding(32)
+            .frame(width: 520)
+            .background(Theme.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
     }
 }

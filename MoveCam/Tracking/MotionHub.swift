@@ -22,6 +22,8 @@ final class MotionHub: ObservableObject {
     private var lastThumbsUp = false
     /// Screenshot mode only.
     var simulateHands = false
+    /// Raw pose for the web game as JSON, called on the video queue for every frame.
+    var onFrame: ((String) -> Void)?
 
     // Keyboard simulation (handy for testing without moving around).
     private var kbLane: Int?
@@ -65,6 +67,12 @@ final class MotionHub: ObservableObject {
         lock.lock(); pendingReset = true; lock.unlock()
     }
 
+    static func frameJSON(_ pose: BodyPose?, thumbsUp: Bool, time: TimeInterval) -> String {
+        guard let pose else { return "{\"t\":\(time),\"thumbsUp\":\(thumbsUp),\"joints\":null}" }
+        let joints = pose.joints.map { "\"\($0.key)\":[\(Float($0.value.x)),\(Float($0.value.y))]" }.joined(separator: ",")
+        return "{\"t\":\(time),\"aspect\":\(Float(pose.aspect)),\"thumbsUp\":\(thumbsUp),\"joints\":{\(joints)}}"
+    }
+
     /// Treat the player's current spot as the center (lanes, steering, menu steps).
     func calibrate() {
         lock.lock(); pendingCalibration = true; lock.unlock()
@@ -88,6 +96,7 @@ final class MotionHub: ObservableObject {
         let result = detector.detect(pixelBuffer: pixelBuffer, detectHands: wantHands)
         lastThumbsUp = result.thumbsUp
         let now = CACurrentMediaTime()
+        if let onFrame { onFrame(Self.frameJSON(result.pose, thumbsUp: lastThumbsUp, time: now)) }
         var (snap, events) = interpreter.process(pose: result.pose, thumbsUp: lastThumbsUp && result.pose != nil, time: now)
 
         lock.lock()

@@ -16,9 +16,6 @@ struct SettingsView: View {
 
 private struct GeneralSettings: View {
     @EnvironmentObject var camera: CameraManager
-    @AppStorage(SoundManager.enabledKey) private var soundEnabled = true
-    @AppStorage(MusicPlayer.enabledKey) private var musicEnabled = true
-    @AppStorage(MusicPlayer.volumeKey) private var musicVolume = 0.6
     @AppStorage("showSkeleton") private var showSkeleton = true
 
     var body: some View {
@@ -31,17 +28,8 @@ private struct GeneralSettings: View {
             Text("Plug in a USB webcam or use your iPhone as a Continuity Camera — it shows up here.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            Toggle("Music", isOn: $musicEnabled)
-            if musicEnabled {
-                Slider(value: $musicVolume, in: 0...1) {
-                    Text("Music volume")
-                } minimumValueLabel: {
-                    Image(systemName: "speaker.fill")
-                } maximumValueLabel: {
-                    Image(systemName: "speaker.wave.3.fill")
-                }
-            }
-            Toggle("Sound effects", isOn: $soundEnabled)
+            Text("Music and sound effects are in the in-game settings (gear button in the menu).")
+                .font(.caption).foregroundStyle(.secondary)
             Toggle("Show body tracking skeleton in the live view", isOn: $showSkeleton)
         }
         .formStyle(.grouped)

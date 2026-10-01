@@ -1,11 +1,9 @@
 import AppKit
-import SceneKit
-import SpriteKit
-import SwiftUI
+import WebKit
 
-/// `MoveCam --render-previews <dir>` saves screenshots of the menu, each game
-/// (with a simulated player) and the pause / game-over screens. CI uses it to
-/// check visuals, and the game shots double as menu card art.
+/// `MoveCam --render-previews <dir>` loads each game of the bundled web app
+/// inside the real Mac app and saves screenshots. CI uses it to check that the
+/// web game runs in WKWebView (modules, WebGL, audio) on macOS.
 @MainActor
 enum PreviewRenderer {
     static var outputDirectory: URL? {
@@ -14,87 +12,38 @@ enum PreviewRenderer {
         return URL(fileURLWithPath: args[i + 1])
     }
 
-    static func run(into dir: URL, app: AppState, mainView: @escaping () -> NSView?) {
+    static func run(into dir: URL, bridge: WebBridge) {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let tracks = ["menu"] + GameInfo.all.map { $0.id.rawValue }
-        for (name, seconds) in MusicPlayer.shared.loadReport(tracks).sorted(by: { $0.key < $1.key }) {
-            print("[music] \(name): \(String(format: "%.1f", seconds))s")
-        }
-        let hub = MotionHub()
-        hub.simulateHands = true
-        var remaining = GameInfo.all
-        var window: NSWindow?
-        var game: GameSession?
-        var shots: [GameID: CGImage] = [:]
-
-        func finishUp() {
-            if let background = shots[.canyonRun] {
-                saveSwiftUI(PauseOverlay().environmentObject(app), background: background, to: dir.appendingPathComponent("screen-pause.png"))
-            }
-            if let background = shots[.fruitFrenzy] {
-                let result = GameResult(score: 1240, detail: "48 fruit sliced")
-                saveSwiftUI(GameOverOverlay(result: result, isBest: true).environmentObject(app), background: background,
-                            to: dir.appendingPathComponent("screen-gameover.png"))
-            }
-            NSApp.terminate(nil)
+        var errors = 0
+        bridge.onConsoleError = { _ in errors += 1 }
+        var targets: [(name: String, query: String)] = [("menu", "")]
+        for id in ["canyonRun", "fruitFrenzy", "penaltySave", "alpineRush", "boxingBlitz"] {
+            targets.append((id, "?preview=\(id)"))
         }
 
         func next() {
-            game?.stop()
-            window?.orderOut(nil)
-            guard !remaining.isEmpty else { finishUp(); return }
-            let info = remaining.removeFirst()
-            let session = info.make(hub)
-            let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1280, height: 720), styleMask: [.titled], backing: .buffered, defer: false)
-            w.contentView = session.contentView
-            w.orderFront(nil)
-            window = w
-            game = session
-            session.start()
-            hub.keyboardStep(1)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 4.6) { hub.keyboardJump() }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) { (session as? FruitFrenzyGame)?.showcase() }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 6.0) {
-                if let image = capture(session) {
-                    shots[info.id] = image
-                    write(image, to: dir.appendingPathComponent("\(info.id.rawValue).png"))
+            guard !targets.isEmpty else {
+                print("[preview] done, \(errors) JavaScript errors")
+                NSApp.terminate(nil)
+                return
+            }
+            let target = targets.removeFirst()
+            bridge.load(query: target.query)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 7) {
+                bridge.webView.evaluateJavaScript("JSON.stringify({screen: window.__movecam?.state.screen, game: !!window.__movecam?.state.game, webgl: !!document.createElement('canvas').getContext('webgl2')})") { result, _ in
+                    print("[preview] \(target.name): \(result ?? "no result")")
                 }
-                next()
+                bridge.webView.takeSnapshot(with: nil) { image, error in
+                    if let image, let tiff = image.tiffRepresentation, let rep = NSBitmapImageRep(data: tiff),
+                       let png = rep.representation(using: .png, properties: [:]) {
+                        try? png.write(to: dir.appendingPathComponent("\(target.name).png"))
+                    } else {
+                        print("[preview] snapshot failed for \(target.name): \(error?.localizedDescription ?? "?")")
+                    }
+                    next()
+                }
             }
         }
-
-        // The menu as it first appears.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-            if let view = mainView(), let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
-                view.cacheDisplay(in: view.bounds, to: rep)
-                try? rep.representation(using: .png, properties: [:])?.write(to: dir.appendingPathComponent("screen-menu.png"))
-            }
-            next()
-        }
-    }
-
-    private static func capture(_ session: GameSession) -> CGImage? {
-        if let scnView = session.contentView as? SCNView {
-            return Art.cgImage(scnView.snapshot())
-        } else if let skView = session.contentView as? SKView, let scene = skView.scene {
-            return skView.texture(from: scene)?.cgImage()
-        }
-        return nil
-    }
-
-    private static func write(_ image: CGImage, to url: URL) {
-        try? NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])?.write(to: url)
-    }
-
-    private static func saveSwiftUI<V: View>(_ overlay: V, background: CGImage, to url: URL) {
-        let view = ZStack {
-            Image(decorative: background, scale: 1).resizable()
-            overlay
-        }
-        .frame(width: 1280, height: 720)
-        .preferredColorScheme(.dark)
-        let renderer = ImageRenderer(content: view)
-        renderer.scale = 1
-        if let image = renderer.cgImage { write(image, to: url) }
+        next()
     }
 }

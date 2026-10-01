@@ -104,11 +104,12 @@ const menu = $(`<div id="menu">
     <div class="brand">
       <img src="${ASSETS}icons/icon-180.png" alt="">
       <span class="name">MoveCam</span><span class="sep"></span>
-      <select id="cameraSelect" class="${native ? "hidden" : ""}" title="Camera"></select>
+      <select id="cameraSelect" title="Camera"></select>
       <span id="planBadge" class="btn"></span>
       <button class="btn" id="musicBtn" title="Music"></button>
       <button class="btn" id="settingsBtn" title="Settings">⚙︎</button>
       <button class="btn ${native || !document.fullscreenEnabled ? "hidden" : ""}" id="fullBtn" title="Full screen">⤢</button>
+      <button class="btn accent hidden" id="updateBtn" title="A new version is available">⬇︎ Update</button>
     </div>
     <h1>Games</h1>
     <div class="sub">Swing an arm out to the side to choose. Raise a hand to play. Or just tap.</div>
@@ -236,7 +237,7 @@ function openSettings() {
     <div class="row"><label>Music volume</label><input type="range" min="0" max="1" step="0.05" value="${audio.settings.volume}"></div>
     <div class="row"><label>Sound effects</label>${sw(audio.settings.sound)}</div>
     <div class="row"><label>Show tracking skeleton</label>${sw(loadSetting("skeleton", true))}</div>
-    <div class="row"><label>Share anonymous play stats<small>Game names, scores and play time. Never video.</small></label>${sw(loadSetting("shareUsage", true))}</div>
+    <div class="row ${native ? "hidden" : ""}"><label>Share anonymous play stats<small>Game names, scores and play time. Never video.</small></label>${sw(loadSetting("shareUsage", true))}</div>
     <div class="row"><label>Your MoveCam ID<small>${account.isPro ? (account.plan === "trial" ? "Pro trial" : "Pro") : "Free plan"}</small></label><span class="idbox" style="font-size:15px">${account.id}</span></div>
     <button class="btn accent big" style="align-self:center;margin-top:8px" id="doneBtn">Done</button></div></div>`);
   const switches = el.querySelectorAll(".switch");
@@ -534,7 +535,13 @@ hub.onSnapshot((snap) => {
 });
 
 // Status-driven flow: auto-start when in position, auto-pause when the player leaves.
+let reportedState = "";
 setInterval(() => {
+  const key = state.screen + ":" + state.phase;
+  if (native && key !== reportedState) {
+    reportedState = key;
+    postToNative({ type: "state", screen: state.screen, phase: state.phase });
+  }
   const snap = hub.latest;
   if (state.screen === "menu") {
     if (state.overlay || !snap.status.good) { state.stepArmed = true; return; }
@@ -647,6 +654,18 @@ window.MoveCamNative.setAccount = ({ userId, plan, expiresAt }) => {
   if (userId) account.id = userId;
   setPlan(plan ?? "free", expiresAt ?? null);
 };
+window.MoveCamNative.setCameras = (list, selected) => {
+  const select = menu.querySelector("#cameraSelect");
+  select.innerHTML = list.map((d) => `<option value="${esc(d.id)}">${esc(d.name)}</option>`).join("");
+  select.value = selected;
+  select.onchange = () => postToNative({ type: "selectCamera", id: select.value });
+};
+window.MoveCamNative.setUpdate = (update) => {
+  const btn = menu.querySelector("#updateBtn");
+  btn.classList.toggle("hidden", !update);
+  if (update) btn.textContent = `⬇︎ Update to ${update.version}`;
+};
+menu.querySelector("#updateBtn").addEventListener("click", () => postToNative({ type: "installUpdate" }));
 window.MoveCamNative.command = (name) => {
   if (name === "back") hub.emit("back");
   if (name === "confirm") hub.emit("confirm");

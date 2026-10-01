@@ -1,6 +1,6 @@
 // Builds the web app into server/public/play (served by Netlify and bundled into the Mac app).
 import { build } from "esbuild";
-import { cpSync, mkdirSync, rmSync, readdirSync, writeFileSync, readFileSync, existsSync } from "node:fs";
+import { cpSync, mkdirSync, rmSync, readdirSync, writeFileSync, readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
@@ -27,16 +27,9 @@ await build({
 
 // Static files.
 cpSync(join(here, "static"), out, { recursive: true });
-// Sounds, music and card art are shared with the Mac app.
+// Sounds and music are shared with the Mac app.
 cpSync(join(res, "Sounds"), join(out, "sounds"), { recursive: true });
 cpSync(join(res, "Music"), join(out, "music"), { recursive: true });
-mkdirSync(join(out, "cards"), { recursive: true });
-for (const dir of readdirSync(join(res, "Assets.xcassets"))) {
-  const m = dir.match(/^card-(\w+)\.imageset$/);
-  if (m) cpSync(join(res, "Assets.xcassets", dir, `card-${m[1]}.jpg`), join(out, "cards", `${m[1]}.jpg`));
-}
-const web = join(here, "static", "cards");
-if (existsSync(web)) cpSync(web, join(out, "cards"), { recursive: true });
 // MediaPipe runtime (SIMD build only; every browser we target supports it).
 const wasm = join(here, "node_modules", "@mediapipe", "tasks-vision", "wasm");
 mkdirSync(join(out, "mediapipe", "wasm"), { recursive: true });
@@ -62,4 +55,10 @@ for (const f of files.sort()) hash.update(f).update(readFileSync(join(out, f)));
 const version = hash.digest("hex").slice(0, 12);
 const sw = readFileSync(join(out, "sw.js"), "utf8").replace("__VERSION__", version).replace('"__FILES__"', JSON.stringify(["./", ...files.filter((f) => f !== "index.html")]));
 writeFileSync(join(out, "sw.js"), sw);
+// The Mac app bundles the same build, minus what it doesn't need: MediaPipe (it uses Apple
+// Vision), the service worker, and sounds/music (served from the app's own resources).
+const mac = join(here, "..", "MacWebApp", "WebApp");
+rmSync(join(here, "..", "MacWebApp"), { recursive: true, force: true });
+cpSync(out, mac, { recursive: true, filter: (src) => !/[\\/](mediapipe|sounds|music)([\\/]|$)|sw\.js$/.test(src.slice(out.length)) });
+
 console.log(`Built web app (${files.length} files, version ${version}) → ${out}`);

@@ -11,24 +11,25 @@ struct MoveCamApp: App {
     @StateObject private var hub: MotionHub
     @StateObject private var camera: CameraManager
     @StateObject private var entitlements: EntitlementService
-    @StateObject private var app: AppState
-    @StateObject private var updater = UpdaterController()
+    @StateObject private var updater: UpdaterController
+    @StateObject private var bridge: WebBridge
 
     init() {
         let hub = MotionHub()
         let camera = CameraManager(hub: hub)
         let entitlements = EntitlementService()
+        let updater = UpdaterController()
         _hub = StateObject(wrappedValue: hub)
         _camera = StateObject(wrappedValue: camera)
         _entitlements = StateObject(wrappedValue: entitlements)
-        _app = StateObject(wrappedValue: AppState(hub: hub, camera: camera, entitlements: entitlements))
-        _ = SoundManager.shared
+        _updater = StateObject(wrappedValue: updater)
+        _bridge = StateObject(wrappedValue: WebBridge(hub: hub, camera: camera, entitlements: entitlements, updater: updater))
     }
 
     var body: some Scene {
         Window("MoveCam", id: "main") {
-            RootView()
-                .environmentObject(app)
+            RootView(hub: hub)
+                .environmentObject(bridge)
                 .environmentObject(camera)
                 .environmentObject(entitlements)
                 .environmentObject(updater)

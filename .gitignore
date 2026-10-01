@@ -8,3 +8,4 @@ dist/
 *.key
 web/node_modules/
 shots/
+MacWebApp/
