@@ -53,16 +53,18 @@ final class AlpineRushGame: SceneGame {
                           sun: (x: 0.3, y: 0.75, color: NSColor(calibratedRed: 1, green: 1, blue: 0.92, alpha: 1)))
         scene.background.contents = sky
         scene.lightingEnvironment.contents = sky
-        scene.lightingEnvironment.intensity = 1.4
+        scene.lightingEnvironment.intensity = 0.7
         scene.fogColor = horizon
         scene.fogStartDistance = 50
         scene.fogEndDistance = 190
 
-        Art.addOutdoorLights(to: scene, sunColor: NSColor(calibratedRed: 1, green: 0.97, blue: 0.92, alpha: 1), sunIntensity: 1300,
-                             ambient: NSColor(calibratedRed: 0.65, green: 0.75, blue: 0.95, alpha: 1), ambientIntensity: 500,
+        Art.addOutdoorLights(to: scene, sunColor: NSColor(calibratedRed: 1, green: 0.97, blue: 0.92, alpha: 1), sunIntensity: 850,
+                             ambient: NSColor(calibratedRed: 0.6, green: 0.7, blue: 0.95, alpha: 1), ambientIntensity: 260,
                              sunAngle: (x: -0.8, y: -0.5))
 
         cameraNode.camera = Art.camera(fov: 64, far: 450)
+        cameraNode.camera?.bloomThreshold = 1.2
+        cameraNode.camera?.bloomIntensity = 0.3
         cameraNode.position = SCNVector3(0, 3.8, 7)
         cameraNode.eulerAngles = SCNVector3(-0.3, 0, 0)
         scene.rootNode.addChildNode(cameraNode)
@@ -133,7 +135,7 @@ final class AlpineRushGame: SceneGame {
         let snowTex = Art.noise(base: NSColor(calibratedWhite: 0.96, alpha: 1),
                                 variations: [NSColor(calibratedRed: 0.82, green: 0.88, blue: 0.97, alpha: 1), .white],
                                 blotches: 3000, maxRadius: 8, seed: 41)
-        let snowMat = Art.tiled(Art.material(.white, roughness: 0.55, texture: snowTex), repeatX: 8, repeatY: 2)
+        let snowMat = Art.tiled(Art.material(NSColor(calibratedRed: 0.9, green: 0.93, blue: 0.98, alpha: 1), roughness: 0.6, texture: snowTex), repeatX: 8, repeatY: 2)
         snowMat.normal.contents = snowTex
         snowMat.normal.intensity = 0.3
         let tracks = Art.image(CGSize(width: 256, height: 256)) { ctx, s in
@@ -147,7 +149,7 @@ final class AlpineRushGame: SceneGame {
             }
             ctx.strokePath()
         }
-        let pisteMat = Art.tiled(Art.material(.white, roughness: 0.4, texture: tracks), repeatX: 3, repeatY: 2)
+        let pisteMat = Art.tiled(Art.material(NSColor(calibratedRed: 0.86, green: 0.9, blue: 0.97, alpha: 1), roughness: 0.5, texture: tracks), repeatX: 3, repeatY: 2)
 
         for i in 0..<tileCount {
             let tile = SCNNode()

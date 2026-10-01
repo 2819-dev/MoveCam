@@ -146,6 +146,9 @@ final class Figure {
         rightHip.eulerAngles = SCNVector3(bend, 0, 0)
         leftKnee.eulerAngles = SCNVector3(-bend * 1.6, 0, 0)
         rightKnee.eulerAngles = SCNVector3(-bend * 1.6, 0, 0)
+        // Keep skis flat on the snow whatever the knee bend.
+        leftFoot.eulerAngles = SCNVector3(bend * 0.6, 0, 0)
+        rightFoot.eulerAngles = SCNVector3(bend * 0.6, 0, 0)
         chest.eulerAngles = SCNVector3(-0.45 - 0.4 * tuck, 0, carve * 0.15)
         leftShoulder.eulerAngles = SCNVector3(0.7 + 0.5 * tuck, 0, -0.25)
         rightShoulder.eulerAngles = SCNVector3(0.7 + 0.5 * tuck, 0, 0.25)
