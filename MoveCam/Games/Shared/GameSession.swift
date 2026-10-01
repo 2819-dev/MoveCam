@@ -206,8 +206,8 @@ class SpriteGame: SKScene, GameSession {
 
     /// Maps a body-relative hand to a point in the scene. Stepping sideways
     /// moves the hand too, so the whole screen is reachable.
-    func screenPoint(_ hand: HandPoint, bodyX: CGFloat) -> CGPoint {
-        let x = 0.5 + hand.x * 0.42 + (bodyX - 0.5) * 0.6
+    func screenPoint(_ hand: HandPoint, lateral: CGFloat) -> CGPoint {
+        let x = 0.5 + hand.x * 0.42 + max(-1.5, min(1.5, lateral)) * 0.1
         let y = 0.08 + hand.y * 0.86
         return CGPoint(x: max(0, min(1, x)) * size.width, y: max(0, min(1, y)) * size.height)
     }

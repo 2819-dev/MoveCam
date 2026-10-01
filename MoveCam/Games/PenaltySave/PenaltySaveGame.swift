@@ -354,7 +354,7 @@ final class PenaltySaveGame: SceneGame {
         for (glove, hand) in zip(gloves, [input.leftHand, input.rightHand]) {
             guard let hand else { glove.isHidden = true; continue }
             glove.isHidden = false
-            let x = max(-4.3, min(4.3, hand.x * 3.1 + (input.bodyX - 0.5) * 5.5))
+            let x = max(-4.3, min(4.3, hand.x * 3.1 + max(-1.5, min(1.5, input.lateral)) * 1.6))
             let y = max(0.1, min(3.0, 0.2 + hand.y * 2.6))
             let target = SCNVector3(x, y, 0.25)
             let p = glove.position

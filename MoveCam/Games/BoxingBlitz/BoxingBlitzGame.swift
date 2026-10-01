@@ -73,7 +73,7 @@ final class BoxingBlitzGame: SpriteGame {
 
         for (glove, hand) in zip(gloves, [input.leftHand, input.rightHand]) {
             guard let hand else { glove.sprite.isHidden = true; glove.position = nil; continue }
-            let p = screenPoint(hand, bodyX: input.bodyX)
+            let p = screenPoint(hand, lateral: input.lateral)
             if let old = glove.position {
                 glove.speed = hypot(p.x - old.x, p.y - old.y) / CGFloat(max(dt, 0.001))
             }
@@ -121,7 +121,7 @@ final class BoxingBlitzGame: SpriteGame {
         let scale = size.height / 800
         pad.radius = 62 * scale
         let hand = HandPoint(x: CGFloat.random(in: -0.85...0.85), y: CGFloat.random(in: 0.35...1.0))
-        var p = screenPoint(hand, bodyX: hub.latest.bodyX)
+        var p = screenPoint(hand, lateral: hub.latest.lateral)
         p.x = max(pad.radius * 2, min(size.width - pad.radius * 2, p.x))
         p.y = max(pad.radius * 2, min(size.height - pad.radius * 2.5, p.y))
         guard !pads.contains(where: { hypot($0.position.x - p.x, $0.position.y - p.y) < pad.radius * 2.4 }) else { return }

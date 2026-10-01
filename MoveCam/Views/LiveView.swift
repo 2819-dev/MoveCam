@@ -56,8 +56,8 @@ struct GestureRings: View {
     var body: some View {
         VStack {
             HStack {
-                if snapshot.thumbsUpProgress > 0.05 {
-                    ring(progress: snapshot.thumbsUpProgress, symbol: "hand.thumbsup.fill", color: Theme.good)
+                if snapshot.confirmProgress > 0.05 {
+                    ring(progress: snapshot.confirmProgress, symbol: "hand.thumbsup.fill", color: Theme.good)
                 }
                 if snapshot.handsUpProgress > 0.05 {
                     ring(progress: snapshot.handsUpProgress, symbol: "figure.arms.open", color: .white)

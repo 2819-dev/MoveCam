@@ -118,6 +118,7 @@ final class AppState: ObservableObject {
             }
             guard let self, !Task.isCancelled else { return }
             self.sound.play(.go)
+            self.hub.calibrate()
             self.phase = .playing
             self.missingSince = nil
             self.hub.resetGestures()
@@ -164,6 +165,7 @@ final class AppState: ObservableObject {
         hub.detectHands = true
         hub.handsUpHold = 1.0
         hub.resetGestures()
+        hub.calibrate()
         sound.play(.pause)
         MusicPlayer.shared.play("menu")
     }
@@ -190,18 +192,18 @@ final class AppState: ObservableObject {
 
     private func handle(_ event: GestureEvent) {
         switch (screen, event) {
-        case (.menu, .thumbsUp):
+        case (.menu, .confirm):
             if showProSheet { showProSheet = false } else { startSelected() }
-        case (.menu, .handsUp):
+        case (.menu, .back):
             if showProSheet { showProSheet = false }
-        case (.game, .thumbsUp):
+        case (.game, .confirm):
             switch phase {
             case .waiting: beginCountdown()
             case .paused: resume()
             case .over: replay()
             default: break
             }
-        case (.game, .handsUp):
+        case (.game, .back):
             switch phase {
             case .playing, .countdown: pause()
             case .paused, .over, .waiting: backToMenu()
@@ -214,13 +216,14 @@ final class AppState: ObservableObject {
         switch screen {
         case .menu:
             guard snap.status.isGood, !showProSheet else { stepArmed = true; return }
-            if stepArmed, snap.bodyX < 0.33 {
+            // Steps are measured from where the player stands, in body widths.
+            if stepArmed, snap.lateral < -0.7 {
                 stepArmed = false
                 moveSelection(-1)
-            } else if stepArmed, snap.bodyX > 0.67 {
+            } else if stepArmed, snap.lateral > 0.7 {
                 stepArmed = false
                 moveSelection(1)
-            } else if snap.bodyX > 0.42 && snap.bodyX < 0.58 {
+            } else if abs(snap.lateral) < 0.35 {
                 stepArmed = true
             }
         case .game:
@@ -261,8 +264,8 @@ final class AppState: ObservableObject {
             if confirm { startSelected(); return true }
             return false
         case .game:
-            if back { handle(.handsUp); return true }
-            if confirm, phase != .playing { handle(.thumbsUp); return true }
+            if back { handle(.back); return true }
+            if confirm, phase != .playing { handle(.confirm); return true }
             guard phase == .playing else { return false }
             switch event.keyCode {
             case 123: hub.keyboardStep(-1)

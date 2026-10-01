@@ -278,8 +278,9 @@ final class CanyonRunGame: SceneGame {
         sinceSpawn += step
 
         // Lanes from where the player stands (with hysteresis).
-        let x = input.bodyX
-        if x < 0.38 { lane = 0 } else if x > 0.62 { lane = 2 } else if x > 0.44 && x < 0.56 { lane = 1 }
+        // About one step (half a body width) to the side changes lane; hysteresis stops flicker.
+        let x = input.lateral
+        if x < -0.55 { lane = 0 } else if x > 0.55 { lane = 2 } else if abs(x) < 0.3 { lane = 1 }
         let previousX = playerX
         playerX += (laneX[lane] - playerX) * min(1, t * 10)
 

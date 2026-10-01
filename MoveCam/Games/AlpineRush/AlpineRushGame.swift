@@ -250,7 +250,7 @@ final class AlpineRushGame: SceneGame {
         sinceSpawn += step
         if tuck { bonus += Int.random(in: 0...1) }
 
-        let targetX = max(-8, min(8, (input.bodyX - 0.5) * 2 * 9))
+        let targetX = max(-8, min(8, input.lateral * 6))
         let previousX = playerX
         playerX += (targetX - playerX) * min(1, t * 4)
         let carve = max(-1, min(1, (playerX - previousX) / max(t, 0.001) / 6))

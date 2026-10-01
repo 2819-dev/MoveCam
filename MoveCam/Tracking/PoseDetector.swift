@@ -6,6 +6,7 @@ import Vision
 /// Not thread-safe: call from a single (video) queue.
 final class PoseDetector {
     private let bodyRequest = VNDetectHumanBodyPoseRequest()
+    private var lastCenter: CGPoint?
 
     private static let jointMap: [(VNHumanBodyPoseObservation.JointName, Joint)] = [
         (.nose, .nose), (.neck, .neck),
@@ -36,8 +37,9 @@ final class PoseDetector {
             return Result(pose: nil, thumbsUp: false)
         }
 
-        // Several people in view: follow the biggest (closest) one.
-        var best: (pose: BodyPose, raw: [Joint: CGPoint], size: CGFloat)?
+        // Several people in view: keep following the same player (closest to where
+        // they were last frame) unless someone else is much bigger/closer.
+        var best: (pose: BodyPose, raw: [Joint: CGPoint], score: CGFloat, center: CGPoint)?
         for observation in observations {
             guard let points = try? observation.recognizedPoints(.all) else { continue }
             var joints: [Joint: CGPoint] = [:]
@@ -53,10 +55,17 @@ final class PoseDetector {
                 if let l = joints[.leftShoulder], let r = joints[.rightShoulder] { return pose.distance(l, r) }
                 return 0.01
             }()
-            if best == nil || size > best!.size {
-                best = (pose, raw, size)
+            let center = pose.neckPoint ?? joints.values.first!
+            var score = size
+            if let previous = lastCenter {
+                let moved = hypot((center.x - previous.x) * aspect, center.y - previous.y)
+                score *= max(0.35, 1 - moved * 2.5)
+            }
+            if best == nil || score > best!.score {
+                best = (pose, raw, score, center)
             }
         }
+        lastCenter = best?.center
         guard let chosen = best else { return Result(pose: nil, thumbsUp: false) }
 
         var thumbsUp = false
@@ -114,32 +123,15 @@ final class PoseDetector {
         return false
     }
 
+    private static let handMap: [(VNHumanHandPoseObservation.JointName, HandJoint)] = [
+        (.wrist, .wrist), (.thumbMP, .thumbMP), (.thumbIP, .thumbIP), (.thumbTip, .thumbTip),
+        (.indexMCP, .indexMCP), (.indexTip, .indexTip), (.middleMCP, .middleMCP), (.middleTip, .middleTip),
+        (.ringMCP, .ringMCP), (.ringTip, .ringTip), (.littleMCP, .littleMCP), (.littleTip, .littleTip),
+    ]
+
     static func isThumbsUp(_ p: [VNHumanHandPoseObservation.JointName: CGPoint]) -> Bool {
-        guard let wrist = p[.wrist], let thumbTip = p[.thumbTip], let thumbIP = p[.thumbIP],
-              let thumbMP = p[.thumbMP] else { return false }
-        guard let knuckle = p[.middleMCP] ?? p[.indexMCP] ?? p[.ringMCP] else { return false }
-        func dist(_ a: CGPoint, _ b: CGPoint) -> CGFloat { hypot(a.x - b.x, a.y - b.y) }
-        let handSize = dist(wrist, knuckle)
-        guard handSize > 4 else { return false }
-
-        // Thumb points up, roughly vertical.
-        let rise = thumbTip.y - thumbMP.y
-        guard rise > handSize * 0.4, thumbTip.y > thumbIP.y,
-              abs(thumbTip.x - thumbMP.x) < rise * 1.1 else { return false }
-
-        // The other fingers are curled into a fist below the thumb.
-        let fingers: [(VNHumanHandPoseObservation.JointName, VNHumanHandPoseObservation.JointName)] = [
-            (.indexTip, .indexMCP), (.middleTip, .middleMCP), (.ringTip, .ringMCP), (.littleTip, .littleMCP),
-        ]
-        var curled = 0
-        var seen = 0
-        for (tipName, mcpName) in fingers {
-            guard let tip = p[tipName], let mcp = p[mcpName] else { continue }
-            seen += 1
-            if dist(tip, mcp) < handSize * 0.8 && tip.y < thumbTip.y - handSize * 0.25 {
-                curled += 1
-            }
-        }
-        return seen >= 3 && curled >= seen - 1 && curled >= 3
+        var joints: [HandJoint: CGPoint] = [:]
+        for (name, joint) in handMap { joints[joint] = p[name] }
+        return ThumbsUpClassifier.isThumbsUp(joints)
     }
 }

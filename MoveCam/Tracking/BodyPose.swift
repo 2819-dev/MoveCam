@@ -94,8 +94,10 @@ struct HandPoint {
 }
 
 enum GestureEvent {
-    case thumbsUp
-    case handsUp
+    /// Thumbs up, or one hand raised above the head.
+    case confirm
+    /// Both hands raised above the head.
+    case back
 }
 
 /// Everything a game needs to know about the player, sampled once per frame.
@@ -104,6 +106,10 @@ struct MotionSnapshot {
     var status: PositionStatus = .noPerson
     /// Horizontal body center in the mirrored frame, 0 (left) ... 1 (right).
     var bodyX: CGFloat = 0.5
+    /// Sideways position relative to where the player stood when calibrated,
+    /// in torso lengths (≈ 50 cm). Negative = left. Independent of camera distance.
+    var lateral: CGFloat = 0
+    var isCalibrated = false
     /// Incremented every time a jump is detected; compare with the last seen value.
     var jumpCount: Int = 0
     var isAirborne = false
@@ -111,8 +117,10 @@ struct MotionSnapshot {
     var leftHand: HandPoint?
     var rightHand: HandPoint?
     var handsUpRaised = false
+    var oneHandRaised = false
     var handsUpProgress: Double = 0
-    var thumbsUpProgress: Double = 0
+    /// Progress of the confirm gesture (thumbs up or one hand raised).
+    var confirmProgress: Double = 0
     var timestamp: TimeInterval = 0
     /// True while keyboard controls are driving the player.
     var keyboardActive = false

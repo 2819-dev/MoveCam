@@ -34,6 +34,20 @@ jobs:
             build 2>&1 | grep -E "error:|warning: unre|\*\* BUILD" || true
           test -d build/Build/Products/Release/MoveCam.app
 
+      - name: Motion tracking tests
+        run: |
+          set +e
+          xcodebuild test \
+            -project MoveCam.xcodeproj \
+            -scheme MoveCamTests \
+            -destination 'platform=macOS' \
+            -derivedDataPath build-tests \
+            CODE_SIGN_IDENTITY=- > test.log 2>&1
+          code=$?
+          grep -E "Test Case .*(passed|failed)|error:|\*\* TEST" test.log
+          [ $code = 0 ] || tail -60 test.log
+          exit $code
+
       - name: Render game previews
         run: |
           build/Build/Products/Release/MoveCam.app/Contents/MacOS/MoveCam --render-previews "$PWD/previews" &

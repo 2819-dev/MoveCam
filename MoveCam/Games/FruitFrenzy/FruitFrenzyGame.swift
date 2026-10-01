@@ -131,7 +131,7 @@ final class FruitFrenzyGame: SpriteGame {
                 blade.trail.path = nil
                 continue
             }
-            let p = screenPoint(hand, bodyX: input.bodyX)
+            let p = screenPoint(hand, lateral: input.lateral)
             if let old = blade.position {
                 let d = hypot(p.x - old.x, p.y - old.y)
                 blade.speed = d / CGFloat(max(dt, 0.001))

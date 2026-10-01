@@ -17,7 +17,7 @@ struct MenuView: View {
                         Text("Games")
                             .font(Theme.title(30))
                             .foregroundStyle(.white)
-                        Text("Step left or right to choose. Thumbs up to play.")
+                        Text("Step left or right to choose. Thumbs up or raise a hand to play.")
                             .font(Theme.body(15))
                             .foregroundStyle(Theme.secondary)
                     }
@@ -196,7 +196,7 @@ struct HintBar: View {
     var body: some View {
         HStack(spacing: 28) {
             GestureHint(symbol: "figure.walk", title: "Step left or right", detail: "Choose a game")
-            GestureHint(symbol: "hand.thumbsup.fill", title: "Thumbs up", detail: "Play")
+            GestureHint(symbol: "hand.raised.fill", title: "Thumbs up or raise a hand", detail: "Play")
             GestureHint(symbol: "figure.arms.open", title: "Both hands up", detail: "Pause or go back")
             Spacer()
             Text("Keyboard: arrow keys, Space, Esc")
@@ -330,7 +330,7 @@ struct ProComingSoonCard: View {
             Button("OK") { app.showProSheet = false }
                 .buttonStyle(FlatButtonStyle(fill: Theme.accent))
                 .padding(.top, 6)
-            Text("Thumbs up or Space to close")
+            Text("Raise a hand, thumbs up or press Space to close")
                 .font(Theme.body(12))
                 .foregroundStyle(Theme.tertiary)
         }
