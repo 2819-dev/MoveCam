@@ -1,11 +1,9 @@
-import type { Config } from "@netlify/functions";
-import { GAMES, getUser, json, newUser, normalizeId, readJSON, store, type ActivityEvent } from "../lib/store.mts";
+import { GAMES, getUser, handler, json, newUser, normalizeId, readJSON, store, type ActivityEvent } from "../../lib/store";
 
 const TYPES = new Set(["start", "finish", "quit", "locked", "open"]);
 
 // Gameplay activity, sent in small batches by the app.
-export default async (req: Request) => {
-  if (req.method !== "POST") return json({ error: "POST only" }, 405);
+export const onRequestPost = handler(async (req) => {
   const body = await readJSON(req);
   const id = normalizeId(body?.userId);
   if (!id || !Array.isArray(body?.events)) return json({ error: "Bad request" }, 400);
@@ -37,8 +35,6 @@ export default async (req: Request) => {
   user.recent.sort((a, b) => b.t.localeCompare(a.t));
   user.recent = user.recent.slice(0, 60);
   user.lastSeen = now;
-  await store().setJSON(`users/${id}`, user);
+  await store.set(`users/${id}`, user);
   return json({ ok: true });
-};
-
-export const config: Config = { path: "/api/events" };
+});

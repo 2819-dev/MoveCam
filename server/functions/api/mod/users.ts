@@ -1,26 +1,23 @@
-import type { Config } from "@netlify/functions";
-import { activePlan, getGrant, json, normalizeId, requireModerator, store, type Grant, type UserRecord } from "../lib/store.mts";
+import { activePlan, handler, json, normalizeId, requireModerator, store, type Grant, type UserRecord } from "../../../lib/store";
+
+async function loadAll<T>(keys: string[]) {
+  const out: [string, T][] = [];
+  for (let i = 0; i < keys.length; i += 40) {
+    const chunk = await Promise.all(keys.slice(i, i + 40).map(async (k) => [k, await store.get<T>(k)] as const));
+    for (const [k, v] of chunk) if (v) out.push([k, v]);
+  }
+  return out;
+}
 
 // Moderator: list / search all players, with summary stats.
-export default async (req: Request) => {
+export const onRequestGet = handler(async (req) => {
   const denied = await requireModerator(req);
   if (denied) return denied;
-  const url = new URL(req.url);
-  const query = (url.searchParams.get("q") ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const query = (new URL(req.url).searchParams.get("q") ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
 
-  const s = store();
-  const { blobs } = (await s.list({ prefix: "users/" })) as { blobs: { key: string }[] };
-  const users: UserRecord[] = [];
-  for (let i = 0; i < blobs.length; i += 40) {
-    const chunk = await Promise.all(blobs.slice(i, i + 40).map((b) => s.get(b.key, { type: "json" })));
-    users.push(...(chunk.filter(Boolean) as UserRecord[]));
-  }
-  const grantKeys = ((await s.list({ prefix: "grants/" })) as { blobs: { key: string }[] }).blobs;
+  const users = (await loadAll<UserRecord>(await store.keys("users/"))).map(([, u]) => u);
   const grants = new Map<string, Grant>();
-  await Promise.all(grantKeys.map(async (b) => {
-    const g = (await s.get(b.key, { type: "json" })) as Grant | null;
-    if (g) grants.set(b.key.slice("grants/".length), g);
-  }));
+  for (const [k, g] of await loadAll<Grant>(await store.keys("grants/"))) grants.set(k.slice("grants/".length), g);
 
   const day = Date.now() - 86_400_000;
   const playsByGame: Record<string, number> = {};
@@ -44,6 +41,4 @@ export default async (req: Request) => {
     };
   });
   return json({ stats, users: list, exactMatch: normalizeId(query) });
-};
-
-export const config: Config = { path: "/api/mod/users" };
+});

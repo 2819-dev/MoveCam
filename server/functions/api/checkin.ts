@@ -1,9 +1,7 @@
-import type { Config } from "@netlify/functions";
-import { activePlan, getGrant, getUser, json, newUser, normalizeId, readJSON, store } from "../lib/store.mts";
+import { activePlan, getGrant, getUser, handler, json, newUser, normalizeId, readJSON, store } from "../../lib/store";
 
 // The app calls this at launch and every so often: registers the player and returns their plan.
-export default async (req: Request) => {
-  if (req.method !== "POST") return json({ error: "POST only" }, 405);
+export const onRequestPost = handler(async (req) => {
   const body = await readJSON(req);
   const id = normalizeId(body?.userId);
   if (!id) return json({ error: "Bad user id" }, 400);
@@ -18,8 +16,6 @@ export default async (req: Request) => {
   user.lastSeen = now;
   if (typeof body?.appVersion === "string") user.appVersion = body.appVersion.slice(0, 20);
   if (typeof body?.macOS === "string") user.macOS = body.macOS.slice(0, 40);
-  await store().setJSON(`users/${id}`, user);
+  await store.set(`users/${id}`, user);
   return json({ userId: id, ...activePlan(await getGrant(id)) });
-};
-
-export const config: Config = { path: "/api/checkin" };
+});

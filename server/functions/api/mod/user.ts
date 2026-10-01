@@ -1,8 +1,7 @@
-import type { Config } from "@netlify/functions";
-import { activePlan, getGrant, getUser, json, normalizeId, requireModerator } from "../lib/store.mts";
+import { activePlan, getGrant, getUser, handler, json, normalizeId, requireModerator } from "../../../lib/store";
 
 // Moderator: everything about one player.
-export default async (req: Request) => {
+export const onRequestGet = handler(async (req) => {
   const denied = await requireModerator(req);
   if (denied) return denied;
   const id = normalizeId(new URL(req.url).searchParams.get("id"));
@@ -11,6 +10,4 @@ export default async (req: Request) => {
   if (!user) return json({ error: `No player with ID ${id} has opened MoveCam yet.` }, 404);
   const grant = await getGrant(id);
   return json({ user, grant, ...activePlan(grant) });
-};
-
-export const config: Config = { path: "/api/mod/user" };
+});

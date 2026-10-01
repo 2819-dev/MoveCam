@@ -1,15 +1,57 @@
-import { getStore, getDeployStore } from "@netlify/blobs";
 import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import { Buffer } from "node:buffer";
+
+// ---------- environment ----------
+
+type KV = {
+  get(key: string, type: "json"): Promise<unknown>;
+  put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void>;
+  delete(key: string): Promise<void>;
+  list(options: { prefix: string; cursor?: string }): Promise<{ keys: { name: string }[]; list_complete: boolean; cursor?: string }>;
+};
+
+export type Env = { DB: KV; MODERATOR_PASSWORD?: string; SESSION_SECRET?: string };
+
+type Context = { request: Request; env: Env };
+
+let env: Env;
+
+/** Wraps a Pages Function: binds the environment and turns crashes into JSON errors. */
+export function handler(fn: (req: Request) => Promise<Response>) {
+  return async (context: Context) => {
+    env = context.env;
+    try {
+      return await fn(context.request);
+    } catch (err) {
+      console.error(err);
+      return json({ error: "Server error" }, 500);
+    }
+  };
+}
 
 // ---------- storage ----------
 
-export function store() {
-  // Production data stays separate from preview deploys.
-  if (Netlify.context?.deploy?.context === "production") {
-    return getStore({ name: "movecam", consistency: "strong" });
-  }
-  return getDeployStore("movecam");
-}
+export const store = {
+  async get<T>(key: string): Promise<T | null> {
+    return (await env.DB.get(key, "json")) as T | null;
+  },
+  async set(key: string, value: unknown, ttlSeconds?: number) {
+    await env.DB.put(key, JSON.stringify(value), ttlSeconds ? { expirationTtl: ttlSeconds } : undefined);
+  },
+  async delete(key: string) {
+    await env.DB.delete(key);
+  },
+  async keys(prefix: string): Promise<string[]> {
+    const names: string[] = [];
+    let cursor: string | undefined;
+    do {
+      const page = await env.DB.list({ prefix, cursor });
+      names.push(...page.keys.map((k) => k.name));
+      cursor = page.list_complete ? undefined : page.cursor;
+    } while (cursor);
+    return names;
+  },
+};
 
 export type Grant = {
   plan: "pro" | "trial";
@@ -48,16 +90,16 @@ export function normalizeId(raw: unknown): string | null {
   return ID_PATTERN.test(id) ? id : null;
 }
 
-export async function getUser(id: string): Promise<UserRecord | null> {
-  return (await store().get(`users/${id}`, { type: "json" })) as UserRecord | null;
+export async function getUser(id: string) {
+  return store.get<UserRecord>(`users/${id}`);
 }
 
 export function newUser(id: string, now: string): UserRecord {
   return { id, firstSeen: now, lastSeen: now, sessions: 0, totalPlays: 0, totalSeconds: 0, games: {}, recent: [] };
 }
 
-export async function getGrant(id: string): Promise<Grant | null> {
-  return (await store().get(`grants/${id}`, { type: "json" })) as Grant | null;
+export async function getGrant(id: string) {
+  return store.get<Grant>(`grants/${id}`);
 }
 
 export function activePlan(grant: Grant | null): { plan: "free" | "pro" | "trial"; expiresAt: string | null } {
@@ -85,6 +127,10 @@ export async function readJSON(req: Request): Promise<any> {
   }
 }
 
+export function clientIP(req: Request) {
+  return req.headers.get("cf-connecting-ip") ?? "unknown";
+}
+
 // ---------- moderator auth ----------
 
 type PasswordRecord = { salt: string; hash: string; version: number };
@@ -94,13 +140,13 @@ function hashPassword(password: string, salt: string) {
 }
 
 async function passwordRecord(): Promise<PasswordRecord | null> {
-  const saved = (await store().get("config/password", { type: "json" })) as PasswordRecord | null;
+  const saved = await store.get<PasswordRecord>("config/password");
   if (saved) return saved;
-  const initial = Netlify.env.get("MODERATOR_PASSWORD");
+  const initial = env.MODERATOR_PASSWORD;
   if (!initial) return null;
   const salt = randomBytes(16).toString("hex");
   const record = { salt, hash: hashPassword(initial, salt), version: 1 };
-  await store().setJSON("config/password", record);
+  await store.set("config/password", record);
   return record;
 }
 
@@ -115,11 +161,13 @@ export async function checkPassword(password: string): Promise<PasswordRecord | 
 export async function setPassword(newPassword: string) {
   const current = await passwordRecord();
   const salt = randomBytes(16).toString("hex");
-  await store().setJSON("config/password", { salt, hash: hashPassword(newPassword, salt), version: (current?.version ?? 0) + 1 });
+  const record = { salt, hash: hashPassword(newPassword, salt), version: (current?.version ?? 0) + 1 };
+  await store.set("config/password", record);
+  return record;
 }
 
 function secret() {
-  const s = Netlify.env.get("SESSION_SECRET");
+  const s = env.SESSION_SECRET;
   if (!s) throw new Error("SESSION_SECRET is not set");
   return s;
 }
@@ -153,20 +201,22 @@ export async function requireModerator(req: Request): Promise<Response | null> {
 }
 
 // Slow down password guessing: lock out an address after repeated failures.
+type Throttle = { fails: number; since: number };
+const LOCKOUT_MS = 15 * 60_000;
+
 export async function loginAllowed(ip: string) {
-  const rec = (await store().get(`throttle/${ip}`, { type: "json" })) as { fails: number; since: number } | null;
-  if (!rec) return true;
-  if (Date.now() - rec.since > 15 * 60_000) return true;
+  const rec = await store.get<Throttle>(`throttle/${ip}`);
+  if (!rec || Date.now() - rec.since > LOCKOUT_MS) return true;
   return rec.fails < 8;
 }
 
 export async function recordLoginFailure(ip: string) {
   const key = `throttle/${ip}`;
-  const rec = (await store().get(key, { type: "json" })) as { fails: number; since: number } | null;
-  const fresh = !rec || Date.now() - rec.since > 15 * 60_000;
-  await store().setJSON(key, fresh ? { fails: 1, since: Date.now() } : { fails: rec!.fails + 1, since: rec!.since });
+  const rec = await store.get<Throttle>(key);
+  const fresh = !rec || Date.now() - rec.since > LOCKOUT_MS;
+  await store.set(key, fresh ? { fails: 1, since: Date.now() } : { fails: rec!.fails + 1, since: rec!.since }, LOCKOUT_MS / 1000);
 }
 
 export async function clearLoginFailures(ip: string) {
-  await store().delete(`throttle/${ip}`);
+  await store.delete(`throttle/${ip}`);
 }

@@ -1,9 +1,7 @@
-import type { Config, Context } from "@netlify/functions";
-import { checkPassword, clearLoginFailures, issueToken, json, loginAllowed, readJSON, recordLoginFailure } from "../lib/store.mts";
+import { checkPassword, clearLoginFailures, clientIP, handler, issueToken, json, loginAllowed, readJSON, recordLoginFailure } from "../../../lib/store";
 
-export default async (req: Request, context: Context) => {
-  if (req.method !== "POST") return json({ error: "POST only" }, 405);
-  const ip = context.ip || "unknown";
+export const onRequestPost = handler(async (req) => {
+  const ip = clientIP(req);
   if (!(await loginAllowed(ip))) return json({ error: "Too many wrong passwords. Try again in 15 minutes." }, 429);
   const body = await readJSON(req);
   const record = await checkPassword(body?.password);
@@ -14,6 +12,4 @@ export default async (req: Request, context: Context) => {
   }
   await clearLoginFailures(ip);
   return json({ token: issueToken(record.version) });
-};
-
-export const config: Config = { path: "/api/mod/login" };
+});

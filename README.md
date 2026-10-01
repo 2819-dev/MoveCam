@@ -19,11 +19,11 @@ Requires macOS 14 (Sonoma) or later. Runs on Apple Silicon and Intel.
 
 ### iPad (no App Store)
 
-1. Open **https://movecam-api.netlify.app/play/** in Safari.
+1. Open **https://movecam.pages.dev/play/** in Safari.
 2. Tap **Share → Add to Home Screen**. MoveCam opens full screen like an app and works offline after the first load.
 3. Allow camera access, prop the iPad up, and step back.
 
-The landing page is at `https://movecam-api.netlify.app` and the download page at `/download/`.
+The landing page is at `https://movecam.pages.dev` and the download page at `/download/`.
 
 ## How to play
 
@@ -69,14 +69,21 @@ Players can turn off sharing play stats in **Settings → Account**. Only game n
 
 ### The server
 
-The panel, player list and Pro checks run on a small server in [`server/`](server): Netlify Functions plus Netlify Blobs storage, deployed as the Netlify project **movecam-api** (`https://movecam-api.netlify.app`). The moderator password and session secret are stored as Netlify environment variables, never in the app.
+The website, web app, moderator panel, player list and Pro checks are served from [`server/`](server) by **Cloudflare Pages** (project **movecam**, `https://movecam.pages.dev`):
 
-**One-time setup** (no keys needed): connect the Netlify project to this GitHub repo so it deploys automatically.
+- `server/public/`: the landing page, download page and web app (built by `web/`, committed)
+- `server/functions/api/`: Pages Functions for check-in, activity and the moderator API
+- Storage: a Cloudflare KV namespace bound as `DB` (see `server/wrangler.toml`)
 
-1. Open [app.netlify.com/projects/movecam-api](https://app.netlify.com/projects/movecam-api) → **Project configuration** → **Build & deploy** → **Link repository**.
-2. Choose GitHub → **2819-dev/MoveCam**.
-3. Set **Base directory** to `server` and the **Branch to deploy** to `main`. Leave the build command and publish directory as they are; `server/netlify.toml` sets them.
-4. Click **Deploy**. From then on, every push to `main` that changes `server/` redeploys it.
+The Pages project is connected to this GitHub repo, so every push to `main` redeploys it. The moderator password and session secret are encrypted Cloudflare secrets, never in the app. To set them (once):
+
+```bash
+cd server
+npx wrangler pages secret put MODERATOR_PASSWORD --project-name movecam
+npx wrangler pages secret put SESSION_SECRET --project-name movecam   # any long random string
+```
+
+or in the dashboard: **Workers & Pages → movecam → Settings → Variables and Secrets** (type **Secret**), then redeploy. Run the server locally with `cd server && npm i && npx wrangler pages dev` (put test values in `server/.dev.vars`).
 
 ## Updates
 
