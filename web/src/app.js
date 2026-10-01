@@ -668,6 +668,8 @@ if (params.has("preview")) {
     state.game.start();
     hub.keyboardStep(1);
     setTimeout(() => hub.keyboardJump(), 1500);
+    setTimeout(() => state.game?.showcase?.(), Number(params.get("showcase") ?? 3500));
+    if (params.has("clean")) { live.classList.add("hidden"); hud.show(false); pauseBtn.classList.add("hidden"); }
   }
 } else if (native) {
   audio.unlock();

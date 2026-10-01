@@ -44,6 +44,9 @@ for (const f of ["vision_wasm_internal.js", "vision_wasm_internal.wasm", "vision
   cpSync(join(wasm, f), join(out, "mediapipe", "wasm", f));
 }
 
+// Landing and download pages live at the site root.
+cpSync(join(here, "site"), join(out, ".."), { recursive: true });
+
 // Service worker cache list (offline play once loaded).
 const files = [];
 const walk = (d, rel = "") => {

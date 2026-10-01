@@ -43,6 +43,15 @@ const errors = [];
 page.on("console", (m) => { if (m.type() === "error" || m.type() === "warning") errors.push(`[${m.type()}] ${m.text()}`); });
 page.on("pageerror", (e) => errors.push(`[pageerror] ${e.message}`));
 
+if (games.includes("site")) {
+  for (const [path, name, h] of [["/", "landing", 1500], ["/download/", "download", 900]]) {
+    await page.setViewportSize({ width: 1280, height: h });
+    await page.goto(`http://localhost:${port}${path}`);
+    await page.waitForTimeout(800);
+    await page.screenshot({ path: join(out, `${name}.png`) });
+  }
+  await page.setViewportSize({ width: 1280, height: 720 });
+}
 if (!games.length || games.includes("menu")) {
   await page.goto(`http://localhost:${port}/play/`);
   await page.waitForTimeout(800);
@@ -51,8 +60,8 @@ if (!games.length || games.includes("menu")) {
   await page.waitForTimeout(4000);
   await page.screenshot({ path: join(out, "menu.png") });
 }
-for (const id of games.filter((g) => g !== "menu")) {
-  await page.goto(`http://localhost:${port}/play/?preview=${id}`);
+for (const id of games.filter((g) => g !== "menu" && g !== "site")) {
+  await page.goto(`http://localhost:${port}/play/?preview=${id}${process.env.CLEAN ? "&clean=1" : ""}`);
   await page.waitForTimeout(Number(process.env.WAIT ?? 6000));
   await page.screenshot({ path: join(out, `${id}.png`) });
   const fps = await page.evaluate(() => new Promise((r) => { let n = 0; const s = performance.now(); const f = () => { n++; if (performance.now() - s < 1000) requestAnimationFrame(f); else r(n); }; requestAnimationFrame(f); }));

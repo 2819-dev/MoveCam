@@ -33,7 +33,7 @@ export class Audio {
   async fetchBuffer(url) {
     const res = await fetch(url);
     const data = await res.arrayBuffer();
-    return await new Promise((resolve, reject) => this.ctx.decodeAudioData(data, resolve, reject));
+    return await this.ctx.decodeAudioData(data);
   }
 
   async loadSound(name) {
