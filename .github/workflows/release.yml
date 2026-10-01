@@ -6,7 +6,7 @@ name: Release
 # big update that asks players first.
 on:
   push:
-    branches: [main]
+    branches: [main, claude/clever-fermi-1vxyq3]
     paths-ignore: ["**.md", "entitlements.json"]
   workflow_dispatch:
 
