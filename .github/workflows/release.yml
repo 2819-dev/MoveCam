@@ -5,7 +5,7 @@ name: Release
 # Players' apps show an Update button when a newer release is out.
 on:
   push:
-    branches: [main]
+    branches: [main, claude/clever-fermi-1vxyq3]
     paths-ignore: ["**.md", "entitlements.json"]
   workflow_dispatch:
 
