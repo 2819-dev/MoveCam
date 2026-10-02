@@ -17,7 +17,7 @@ enum PreviewRenderer {
         var errors = 0
         bridge.onConsoleError = { _ in errors += 1 }
         var targets: [(name: String, query: String)] = [("menu", "")]
-        for id in ["canyonRun", "fruitFrenzy", "penaltySave", "alpineRush", "boxingBlitz"] {
+        for id in ["canyonRun", "fruitFrenzy", "penaltySave", "wallRush", "alpineRush", "boxingBlitz", "dodgeball"] {
             targets.append((id, "?preview=\(id)"))
         }
 

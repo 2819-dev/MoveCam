@@ -308,9 +308,58 @@ def boxing():
     return s.mix({"drums": 1.0, "bass": 0.9, "music": 0.8, "lead": 0.75}, rev=0.18, side=0.45)
 
 
+def wall():
+    # Game-show funk: four-on-the-floor, syncopated bass, bright stabs.
+    s = Song(122, 16, seed=51)
+    prog = [chord(57, "m"), chord(62, "m"), chord(55, "M"), chord(60, "M")]  # Am Dm G C
+    roots = [33, 38, 43, 36]
+    for bar in range(16):
+        ch = prog[bar % 4]
+        r = roots[bar % 4]
+        for bt in range(4):
+            s.kick(bar, bt, 0.9, punch=0.9)
+        for bt in (1, 3):
+            s.add("drums", s.once("clap", clap), bar, bt, 0.6)
+        for i in range(8):
+            s.add("drums", s.once("oh", lambda: hat(True)) if i % 2 else s.once("ch", hat), bar, i * 0.5, 0.3 if i % 2 else 0.2, 0.25, swing=0.05)
+        for bt, n in [(0, r), (0.75, r + 12), (1.5, r), (2, r + 7), (2.75, r + 10), (3.5, r + 12)]:
+            s.add("bass", s.once(("fb", n), lambda: bass(midi(n), s.beat * 0.4, "saw", 9)), bar, bt, 0.6)
+        for bt in (0.5, 2.5):
+            s.add("music", s.once(("st", bar % 4), lambda: brass([midi(n + 12) for n in ch], s.beat * 0.25)), bar, bt, 0.32, 0.2)
+    rhythm = [[(0, 0.5), (0.5, 0.5), (1, 0.5), (2, 1), (3, 1)], [(0, 1.5), (1.5, 0.5), (2, 1), (3, 1)]]
+    melody(s, prog, rhythm, scale_notes(69, "minpent"), 8, 8, lead, gain=0.2, octave=12)
+    return s.mix({"drums": 0.9, "bass": 0.85, "music": 0.8, "lead": 0.8}, rev=0.2, side=0.45, lead_delay=s.beat * 0.5)
+
+
+def dodge():
+    # Gym-class rock: driving eighth-note bass, snare backbeat, power-chord stabs.
+    s = Song(150, 16, seed=63)
+    prog = [chord(64, "m"), chord(60, "M"), chord(67, "M"), chord(62, "M")]  # Em C G D
+    roots = [40, 36, 43, 38]
+    for bar in range(16):
+        ch = prog[bar % 4]
+        r = roots[bar % 4]
+        for bt in (0, 1.5, 2, 3.5 if bar % 2 else 2.5):
+            s.kick(bar, bt, 1.0, punch=1.1)
+        for bt in (1, 3):
+            s.add("drums", s.once("sn", lambda: snare(0.3, 190)), bar, bt, 0.9)
+        for i in range(8):
+            s.add("drums", s.once("ch", hat), bar, i * 0.5, 0.3, -0.25)
+        for i in range(8):
+            s.add("bass", s.once(("eb", r), lambda: np.tanh(bass(midi(r), s.beat * 0.45, "square", 10) * 2) * 0.6), bar, i * 0.5, 0.6)
+        s.add("music", s.once(("pw", bar % 4), lambda: brass([midi(ch[0]), midi(ch[0] + 7), midi(ch[0] + 12)], s.beat * 1.6)), bar, 0, 0.4, -0.2)
+        if bar % 4 == 3:
+            for i, n in enumerate([0, 3, 5, 7]):
+                s.add("drums", s.once(("tom", n), lambda: tom(100 + n * 10)), bar, 3 + i * 0.25, 0.5, -0.4 + i * 0.25)
+    rhythm = [[(0, 0.5), (0.5, 0.5), (1, 1), (2, 0.5), (2.5, 1.5)], [(0, 2), (2, 1), (3, 1)]]
+    melody(s, prog, rhythm, scale_notes(64, "minpent"), 8, 8, lead, gain=0.2, octave=12)
+    return s.mix({"drums": 1.0, "bass": 0.85, "music": 0.75, "lead": 0.75}, rev=0.16, side=0.4)
+
+
 TRACKS = {
     "menu": menu, "canyonRun": canyon, "fruitFrenzy": fruit,
     "penaltySave": penalty, "alpineRush": alpine, "boxingBlitz": boxing,
+    "wallRush": wall, "dodgeball": dodge,
 }
 
 

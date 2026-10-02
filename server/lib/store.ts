@@ -94,7 +94,7 @@ export type UserRecord = {
 };
 
 export const ID_PATTERN = /^MC-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/;
-export const GAMES = new Set(["canyonRun", "fruitFrenzy", "penaltySave", "alpineRush", "boxingBlitz"]);
+export const GAMES = new Set(["canyonRun", "fruitFrenzy", "penaltySave", "wallRush", "alpineRush", "boxingBlitz", "dodgeball"]);
 
 export function normalizeId(raw: unknown): string | null {
   if (typeof raw !== "string") return null;

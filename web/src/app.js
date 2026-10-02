@@ -1,6 +1,7 @@
 // MoveCam web app: menu, game flow, gestures, live view. Runs in browsers (iPad, Mac, PC)
 // and inside the Mac app, which feeds it Apple Vision poses instead of the browser camera.
 import * as THREE from "three";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { MotionHub } from "./tracking/hub.js";
 import { BrowserCamera, installNativeBridge, isNativeHost, postToNative } from "./tracking/camera.js";
 import { BONES, STATUS } from "./tracking/pose.js";
@@ -901,6 +902,18 @@ function startSelected() {
   launch(info);
 }
 
+// Soft studio reflections for every game: metal, glossy floors and skin pick up
+// light from all around instead of only the direct lights. Built once.
+let envMap = null;
+function environment() {
+  if (!envMap) {
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    envMap = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    pmrem.dispose();
+  }
+  return envMap;
+}
+
 function launch(info, { party: inParty = false } = {}) {
   clearTimeout(state.countdownTimer);
   state.inParty = inParty;
@@ -908,6 +921,10 @@ function launch(info, { party: inParty = false } = {}) {
   hud.reset();
   state.info = info;
   state.game = info.make(ctx);
+  if (!state.game.scene.environment) {
+    state.game.scene.environment = environment();
+    state.game.scene.environmentIntensity = state.game.environmentIntensity ?? 0.35;
+  }
   state.gameStarted = false;
   state.goodSince = null;
   state.missingSince = null;
@@ -1310,7 +1327,10 @@ if (params.has("preview")) {
     hub.keyboardStep(1);
     setTimeout(() => hub.keyboardJump(), 1500);
     setTimeout(() => state.game?.showcase?.(), Number(params.get("showcase") ?? 3500));
-    if (params.has("clean")) { live.classList.add("hidden"); hud.show(false); pauseBtn.classList.add("hidden"); }
+    if (params.has("clean")) {
+      live.classList.add("hidden"); hud.show(false); pauseBtn.classList.add("hidden");
+      document.getElementById("banner")?.classList.add("hidden");
+    }
   }
 } else if (native) {
   audio.unlock();

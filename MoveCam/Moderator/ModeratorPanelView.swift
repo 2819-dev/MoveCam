@@ -518,7 +518,7 @@ private struct ChangePasswordSheet: View {
 
 private func gameTitle(_ raw: String) -> String {
     ["canyonRun": "Canyon Run", "fruitFrenzy": "Fruit Frenzy", "penaltySave": "Penalty Save",
-     "alpineRush": "Alpine Rush", "boxingBlitz": "Boxing Blitz"][raw] ?? raw
+     "alpineRush": "Alpine Rush", "boxingBlitz": "Boxing Blitz", "wallRush": "Wall Rush", "dodgeball": "Dodgeball"][raw] ?? raw
 }
 
 private func relative(_ iso: String) -> String {
