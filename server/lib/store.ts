@@ -75,6 +75,8 @@ export type UserRecord = {
   totalSeconds: number;
   games: Record<string, GameStats>;
   lastGame?: string;
+  /** Set when the player has an account. */
+  username?: string;
   recent: ActivityEvent[];
 };
 
@@ -131,37 +133,62 @@ export function clientIP(req: Request) {
   return req.headers.get("cf-connecting-ip") ?? "unknown";
 }
 
+// ---------- password hashing ----------
+
+/** PBKDF2 through WebCrypto (fast native code on Cloudflare). Records without
+ *  `algo` were made with scrypt by an earlier version and are upgraded on login. */
+export type Hashed = { salt: string; hash: string; algo?: "pbkdf2" };
+
+const PBKDF2_ITERATIONS = 100_000;
+
+async function pbkdf2(password: string, saltHex: string) {
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);
+  const bits = await crypto.subtle.deriveBits(
+    { name: "PBKDF2", hash: "SHA-256", salt: Buffer.from(saltHex, "hex"), iterations: PBKDF2_ITERATIONS }, key, 256);
+  return Buffer.from(bits).toString("hex");
+}
+
+export async function makeHash(password: string): Promise<Hashed> {
+  const salt = randomBytes(16).toString("hex");
+  return { salt, hash: await pbkdf2(password, salt), algo: "pbkdf2" };
+}
+
+export async function verifyHash(password: unknown, record: Hashed): Promise<boolean> {
+  if (typeof password !== "string" || password.length > 200) return false;
+  const computed = record.algo === "pbkdf2" ? await pbkdf2(password, record.salt) : scryptSync(password, record.salt, 32).toString("hex");
+  const a = Buffer.from(computed, "hex"), b = Buffer.from(record.hash, "hex");
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
 // ---------- moderator auth ----------
 
-type PasswordRecord = { salt: string; hash: string; version: number };
-
-function hashPassword(password: string, salt: string) {
-  return scryptSync(password, salt, 32).toString("hex");
-}
+type PasswordRecord = Hashed & { version: number };
 
 async function passwordRecord(): Promise<PasswordRecord | null> {
   const saved = await store.get<PasswordRecord>("config/password");
   if (saved) return saved;
   const initial = env.MODERATOR_PASSWORD;
   if (!initial) return null;
-  const salt = randomBytes(16).toString("hex");
-  const record = { salt, hash: hashPassword(initial, salt), version: 1 };
+  const record = { ...(await makeHash(initial)), version: 1 };
   await store.set("config/password", record);
   return record;
 }
 
-export async function checkPassword(password: string): Promise<PasswordRecord | null> {
+export async function checkPassword(password: unknown): Promise<PasswordRecord | null> {
   const record = await passwordRecord();
-  if (!record || typeof password !== "string" || password.length > 200) return null;
-  const a = Buffer.from(hashPassword(password, record.salt), "hex");
-  const b = Buffer.from(record.hash, "hex");
-  return a.length === b.length && timingSafeEqual(a, b) ? record : null;
+  if (!record || !(await verifyHash(password, record))) return null;
+  if (record.algo !== "pbkdf2") {
+    // Upgrade an older scrypt hash; same version, so open sessions stay signed in.
+    const upgraded = { ...(await makeHash(password as string)), version: record.version };
+    await store.set("config/password", upgraded);
+    return upgraded;
+  }
+  return record;
 }
 
 export async function setPassword(newPassword: string) {
   const current = await passwordRecord();
-  const salt = randomBytes(16).toString("hex");
-  const record = { salt, hash: hashPassword(newPassword, salt), version: (current?.version ?? 0) + 1 };
+  const record = { ...(await makeHash(newPassword)), version: (current?.version ?? 0) + 1 };
   await store.set("config/password", record);
   return record;
 }
@@ -174,26 +201,35 @@ function secret() {
 
 const SESSION_HOURS = 12;
 
-export function issueToken(version: number) {
-  const payload = Buffer.from(JSON.stringify({ v: version, exp: Date.now() + SESSION_HOURS * 3600_000 })).toString("base64url");
+function sign(data: Record<string, unknown>) {
+  const payload = Buffer.from(JSON.stringify(data)).toString("base64url");
   const sig = createHmac("sha256", secret()).update(payload).digest("base64url");
   return `${payload}.${sig}`;
 }
 
-/** Returns null when the request carries a valid moderator token, else an error response. */
-export async function requireModerator(req: Request): Promise<Response | null> {
+/** The verified payload of the request's bearer token, or null. */
+function readToken(req: Request): Record<string, any> | null {
   const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
   const [payload, sig] = token.split(".");
-  if (!payload || !sig) return json({ error: "Not signed in" }, 401);
+  if (!payload || !sig) return null;
   const expected = createHmac("sha256", secret()).update(payload).digest("base64url");
   const a = Buffer.from(sig), b = Buffer.from(expected);
-  if (a.length !== b.length || !timingSafeEqual(a, b)) return json({ error: "Not signed in" }, 401);
-  let data: { v: number; exp: number };
+  if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
   try {
-    data = JSON.parse(Buffer.from(payload, "base64url").toString());
+    return JSON.parse(Buffer.from(payload, "base64url").toString());
   } catch {
-    return json({ error: "Not signed in" }, 401);
+    return null;
   }
+}
+
+export function issueToken(version: number) {
+  return sign({ v: version, exp: Date.now() + SESSION_HOURS * 3600_000 });
+}
+
+/** Returns null when the request carries a valid moderator token, else an error response. */
+export async function requireModerator(req: Request): Promise<Response | null> {
+  const data = readToken(req);
+  if (!data || data.k === "acct" || typeof data.v !== "number") return json({ error: "Not signed in" }, 401);
   if (data.exp < Date.now()) return json({ error: "Session expired, sign in again" }, 401);
   const record = await passwordRecord();
   if (!record || record.version !== data.v) return json({ error: "Password changed, sign in again" }, 401);
@@ -219,4 +255,71 @@ export async function recordLoginFailure(ip: string) {
 
 export async function clearLoginFailures(ip: string) {
   await store.delete(`throttle/${ip}`);
+}
+
+// ---------- player accounts ----------
+
+export type Account = Hashed & {
+  username: string;
+  playerId: string;
+  avatar: number;
+  createdAt: string;
+  lastLogin: string;
+  /** Bumped by "sign out everywhere" and password changes. */
+  sessions: number;
+};
+
+export const USERNAME = /^[A-Za-z0-9_]{3,16}$/;
+const RESERVED = new Set(["admin", "administrator", "moderator", "mod", "movecam", "support", "staff", "root", "system"]);
+const ID_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+export function usernameProblem(name: unknown): string | null {
+  if (typeof name !== "string" || !USERNAME.test(name)) return "Usernames are 3 to 16 letters, numbers or _";
+  if (RESERVED.has(name.toLowerCase())) return "That username isn't available";
+  return null;
+}
+
+export function randomPlayerId() {
+  const bytes = randomBytes(8);
+  const c = (i: number) => ID_ALPHABET[bytes[i] % ID_ALPHABET.length];
+  return `MC-${c(0)}${c(1)}${c(2)}${c(3)}-${c(4)}${c(5)}${c(6)}${c(7)}`;
+}
+
+export async function getAccount(username: string) {
+  return store.get<Account>(`accounts/${username.toLowerCase()}`);
+}
+
+export async function saveAccount(account: Account) {
+  await store.set(`accounts/${account.username.toLowerCase()}`, account);
+}
+
+const ACCOUNT_DAYS = 365;
+
+export function issueAccountToken(account: Account) {
+  return sign({ k: "acct", a: account.username.toLowerCase(), s: account.sessions, exp: Date.now() + ACCOUNT_DAYS * 86_400_000 });
+}
+
+/** The signed-in player's account, or an error response. */
+export async function requireAccount(req: Request): Promise<Account | Response> {
+  const data = readToken(req);
+  if (!data || data.k !== "acct" || typeof data.a !== "string") return json({ error: "Not signed in" }, 401);
+  if (data.exp < Date.now()) return json({ error: "Signed out, sign in again" }, 401);
+  const account = await getAccount(data.a);
+  if (!account || account.sessions !== data.s) return json({ error: "Signed out, sign in again" }, 401);
+  return account;
+}
+
+/** What the apps get after signing in: profile, plan and best scores. */
+export async function sessionPayload(account: Account, token?: string) {
+  const user = await getUser(account.playerId);
+  const best: Record<string, number> = {};
+  for (const [game, stats] of Object.entries(user?.games ?? {})) best[game] = stats.best;
+  return {
+    ...(token ? { token } : {}),
+    username: account.username,
+    avatar: account.avatar,
+    playerId: account.playerId,
+    ...activePlan(await getGrant(account.playerId)),
+    best,
+  };
 }

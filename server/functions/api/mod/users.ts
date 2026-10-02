@@ -13,7 +13,9 @@ async function loadAll<T>(keys: string[]) {
 export const onRequestGet = handler(async (req) => {
   const denied = await requireModerator(req);
   if (denied) return denied;
-  const query = (new URL(req.url).searchParams.get("q") ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const raw = (new URL(req.url).searchParams.get("q") ?? "").trim();
+  const query = raw.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const nameQuery = raw.toLowerCase();
 
   const users = (await loadAll<UserRecord>(await store.keys("users/"))).map(([, u]) => u);
   const grants = new Map<string, Grant>();
@@ -30,12 +32,14 @@ export const onRequestGet = handler(async (req) => {
     playsByGame,
   };
 
-  const filtered = query ? users.filter((u) => u.id.replace(/-/g, "").includes(query)) : users;
+  const filtered = raw
+    ? users.filter((u) => (query && u.id.replace(/-/g, "").includes(query)) || (u.username ?? "").toLowerCase().includes(nameQuery))
+    : users;
   filtered.sort((a, b) => b.lastSeen.localeCompare(a.lastSeen));
   const list = filtered.slice(0, 500).map((u) => {
     const favorite = Object.entries(u.games).sort((a, b) => b[1].plays - a[1].plays)[0]?.[0] ?? null;
     return {
-      id: u.id, firstSeen: u.firstSeen, lastSeen: u.lastSeen, appVersion: u.appVersion ?? null,
+      id: u.id, username: u.username ?? null, firstSeen: u.firstSeen, lastSeen: u.lastSeen, appVersion: u.appVersion ?? null,
       sessions: u.sessions, totalPlays: u.totalPlays, totalSeconds: u.totalSeconds,
       favoriteGame: favorite, lastGame: u.lastGame ?? null, ...activePlan(grants.get(u.id) ?? null),
     };

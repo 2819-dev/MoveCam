@@ -13,6 +13,7 @@ final class ModeratorClient: ObservableObject {
 
     struct UserSummary: Decodable, Identifiable, Hashable {
         let id: String
+        let username: String?
         let firstSeen: String
         let lastSeen: String
         let appVersion: String?
@@ -43,6 +44,7 @@ final class ModeratorClient: ObservableObject {
 
     struct UserRecord: Decodable {
         let id: String
+        let username: String?
         let firstSeen: String
         let lastSeen: String
         let appVersion: String?

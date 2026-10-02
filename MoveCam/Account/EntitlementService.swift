@@ -18,6 +18,8 @@ final class EntitlementService: ObservableObject {
     var isPro: Bool { plan != .free && (proExpiry.map { $0 > Date() } ?? true) }
 
     private static let idKey = "moveCamUserID"
+    /// This Mac's own anonymous ID, kept so signing out of an account returns to it.
+    private static let deviceKey = "moveCamDeviceID"
     private static let planKey = "cachedPlan"
     private static let expiryKey = "cachedProExpiry"
     private var timer: Timer?
@@ -34,6 +36,27 @@ final class EntitlementService: ObservableObject {
         }
         plan = Plan(rawValue: defaults.string(forKey: Self.planKey) ?? "") ?? .free
         proExpiry = defaults.object(forKey: Self.expiryKey) as? Date
+        if defaults.string(forKey: Self.deviceKey) == nil {
+            defaults.set(userID, forKey: Self.deviceKey)
+        }
+    }
+
+    /// Signing in to an account switches this Mac to the account's player ID
+    /// (so Pro and stats follow the player); signing out (nil) switches back.
+    func adopt(playerID: String?) {
+        let defaults = UserDefaults.standard
+        let target = playerID.flatMap { UserIDFormat.isValid($0) ? $0 : nil }
+            ?? defaults.string(forKey: Self.deviceKey) ?? userID
+        guard target != userID else { return }
+        Analytics.shared.switchUser(to: target)
+        userID = target
+        defaults.set(target, forKey: Self.idKey)
+        // The cached plan belonged to the previous ID.
+        plan = .free
+        proExpiry = nil
+        defaults.removeObject(forKey: Self.planKey)
+        defaults.removeObject(forKey: Self.expiryKey)
+        Task { await refresh() }
     }
 
     func startAutoRefresh() {

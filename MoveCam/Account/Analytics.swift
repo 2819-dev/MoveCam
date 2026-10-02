@@ -32,6 +32,12 @@ final class Analytics {
         }
     }
 
+    /// Sends future events under a different player ID (after signing in or out).
+    func switchUser(to userID: String) {
+        flush()
+        self.userID = userID
+    }
+
     func log(_ type: String, game: String? = nil, score: Int? = nil, seconds: Double? = nil) {
         guard isEnabled, userID != nil else { return }
         var event: [String: Any] = ["type": type, "t": ISODate.timestamp(Date())]

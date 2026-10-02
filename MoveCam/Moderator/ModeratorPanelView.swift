@@ -79,7 +79,7 @@ private struct ModeratorDashboard: View {
                 }
                 HStack {
                     Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                    TextField("Search by MoveCam ID, e.g. MC-AB12-CD34", text: $search)
+                    TextField("Search by username or MoveCam ID (MC-AB12-CD34)", text: $search)
                         .textFieldStyle(.plain)
                         .onSubmit(openExactMatch)
                     if client.isLoading { ProgressView().controlSize(.small) }
@@ -201,7 +201,12 @@ private struct UserRow: View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
-                    Text(user.id).font(.system(.body, design: .monospaced).weight(.semibold))
+                    if let name = user.username {
+                        Text(name).font(.body.weight(.semibold))
+                        Text(user.id).font(.system(.caption, design: .monospaced)).foregroundStyle(.secondary)
+                    } else {
+                        Text(user.id).font(.system(.body, design: .monospaced).weight(.semibold))
+                    }
                     PlanTag(plan: user.plan)
                 }
                 Text("Seen \(relative(user.lastSeen)) · \(user.totalPlays) games\(user.favoriteGame.map { " · loves \(gameTitle($0))" } ?? "")")
@@ -290,7 +295,12 @@ private struct UserDetailView: View {
     private func header(_ d: ModeratorClient.UserDetail) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text(d.user.id).font(.system(.title, design: .monospaced).bold()).textSelection(.enabled)
+                if let name = d.user.username {
+                    Text(name).font(.title.bold()).textSelection(.enabled)
+                    Text(d.user.id).font(.system(.title3, design: .monospaced)).foregroundStyle(.secondary).textSelection(.enabled)
+                } else {
+                    Text(d.user.id).font(.system(.title, design: .monospaced).bold()).textSelection(.enabled)
+                }
                 PlanTag(plan: d.plan)
                 Spacer()
                 Button("Copy ID") {

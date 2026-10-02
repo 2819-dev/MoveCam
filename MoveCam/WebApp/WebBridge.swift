@@ -140,6 +140,8 @@ final class WebBridge: NSObject, ObservableObject, WKScriptMessageHandler, WKNav
                 Analytics.shared.log(name, game: event["game"] as? String, score: event["score"] as? Int,
                                      seconds: (event["seconds"] as? NSNumber)?.doubleValue)
             }
+        case "account":
+            entitlements.adopt(playerID: body["playerId"] as? String)
         case "selectCamera":
             if let id = body["id"] as? String { camera.select(id) }
         case "installUpdate":
