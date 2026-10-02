@@ -73,11 +73,7 @@ export class AlpineRush extends GameBase {
       s.add(tile);
       this.tiles.push(tile);
     }
-    for (let i = 0; i < 10; i++) {
-      const h = K.rand(60, 120), r = h * K.rand(0.8, 1.2), x = (i - 4.5) * 55 + K.rand(-15, 15), z = -K.rand(250, 330);
-      s.add(K.mesh(new THREE.ConeGeometry(r, h, 7), this.M.mountain, { x, y: h / 2 - 5, z, cast: false }));
-      s.add(K.mesh(new THREE.ConeGeometry(r * 0.42, h * 0.42, 7), this.M.cap, { x, y: h - 5 - h * 0.21 + 0.4, z, cast: false }));
-    }
+    s.add(K.mountainBackdrop({ radius: 330, height: 95, y: -10, seed: 11 }));
 
     // Skier with skis and poles.
     this.figure = new Figure({ shirt: "#f0353c", accent: "#ffd61a", pants: "#1b2140", skin: "#e8b89a", hair: "#2f6fe8", shoes: "#222" });

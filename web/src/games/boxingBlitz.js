@@ -70,17 +70,28 @@ export class BoxingBlitz extends GameBase {
     s.add(this.coach.root);
 
     // Your gloves (first person).
-    this.gloves = ["#2563eb", "#e2182a"].map((c) => {
+    this.gloves = ["#2563eb", "#e2182a"].map((c, side) => {
       const g = new THREE.Group();
-      const m = K.mat(c, { rough: 0.25, metal: 0.1 });
-      const fist = K.mesh(new THREE.SphereGeometry(0.16, 20, 16), m);
-      fist.scale.set(0.95, 1, 1.2);
-      const thumb = K.mesh(new THREE.SphereGeometry(0.07, 12, 10), m, { x: 0.1, y: -0.04, z: -0.04 });
-      const cuff = K.mesh(new THREE.CylinderGeometry(0.1, 0.11, 0.16, 14), K.mat(new THREE.Color(c).multiplyScalar(0.45), { rough: 0.5 }), { z: 0.18 });
-      const lace = K.mesh(new THREE.TorusGeometry(0.105, 0.012, 6, 20), K.mat("#f2f2f2", { rough: 0.5 }), { z: 0.2 });
-      g.add(lace);
+      const leather = K.mat(c, { rough: 0.32, metal: 0.05 });
+      const darker = K.mat(new THREE.Color(c).multiplyScalar(0.55), { rough: 0.45 });
+      const white = K.mat("#f2f2f2", { rough: 0.5 });
+      // The padded fist: a rounded lathe shape, wide at the knuckles, narrowing to the wrist.
+      const profile = [[0, -0.2], [0.09, -0.195], [0.15, -0.16], [0.175, -0.08], [0.17, 0.02], [0.15, 0.1], [0.12, 0.15], [0.11, 0.17]]
+        .map(([r, y]) => new THREE.Vector2(r, y));
+      const fist = K.mesh(new THREE.LatheGeometry(profile, 28), leather);
+      fist.rotation.x = -Math.PI / 2; // knuckles point away from you
+      fist.scale.set(1, 1, 0.82);
+      const thumb = K.mesh(new THREE.CapsuleGeometry(0.055, 0.12, 6, 12), leather, { x: (side ? -1 : 1) * 0.14, y: -0.03, z: -0.02 });
+      thumb.rotation.x = Math.PI / 2.4;
+      // Cuff with a white band and a darker wrist opening facing you.
+      const cuff = K.mesh(new THREE.CylinderGeometry(0.115, 0.125, 0.14, 24, 1, true), darker, { z: 0.22 });
       cuff.rotation.x = Math.PI / 2;
-      g.add(fist, thumb, cuff);
+      const band = K.mesh(new THREE.TorusGeometry(0.118, 0.016, 8, 28), white, { z: 0.17 });
+      const back = K.mesh(new THREE.CircleGeometry(0.115, 24), darker, { z: 0.29 });
+      const logo = K.mesh(new THREE.CircleGeometry(0.045, 20), white, { y: 0.12, z: -0.02 });
+      logo.rotation.x = -Math.PI / 2.6;
+      g.add(fist, thumb, cuff, band, back, logo);
+      g.rotation.order = "YXZ";
       g.visible = false;
       s.add(g);
       return { node: g, pos: null, speed: 0 };
@@ -127,7 +138,8 @@ export class BoxingBlitz extends GameBase {
       const shown = p.clone();
       shown.z -= g.lunge * 1.2;
       g.node.position.lerp(shown, 0.6);
-      g.node.rotation.z = (i === 0 ? 1 : -1) * 0.3;
+      // Tilted so you see the top of the glove, angled in like a guard.
+      g.node.rotation.set(0.85 - g.lunge * 0.6, (i === 0 ? -1 : 1) * 0.18, (i === 0 ? 1 : -1) * 0.25);
     });
 
     // Pads appear on the coach's gloves/body in different spots.

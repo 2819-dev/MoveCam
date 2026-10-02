@@ -77,12 +77,13 @@ export class CanyonRun extends GameBase {
         tile.add(sand);
       }
       const props = [];
-      for (let k = 0; k < 3; k++) props.push(K.rock(K.rand(0.4, 1.1), this.M.rock));
+      for (let k = 0; k < 3; k++) props.push(K.rock(K.rand(0.4, 1.1), this.M.rock, { detail: 2 }));
       props.push(K.cactus(K.rand(2.2, 3.6)));
       if (Math.random() < 0.6) props.push(K.cactus(K.rand(1.6, 3)));
       for (let k = 0; k < 2; k++) {
-        const wall = K.rock(K.rand(6, 10), this.M.rock);
-        wall.scale.set(1, K.rand(1.6, 2.6), 1.3);
+        // Sandstone buttes and hoodoos: tall, layered, flat-ish tops.
+        const wall = K.rock(K.rand(6, 10), this.M.rock, { detail: 3, rough: 0.28, flat: 1, mesa: K.rand(0.45, 0.75), bands: true });
+        wall.scale.set(1, K.rand(1.5, 2.3), 1.2);
         wall.userData.wall = true;
         props.push(wall);
       }
@@ -105,7 +106,10 @@ export class CanyonRun extends GameBase {
     // Distant mesas (don't move: they're "infinitely" far).
     for (let i = 0; i < 16; i++) {
       const side = i % 2 ? 1 : -1, h = K.rand(25, 60);
-      const mesa = K.mesh(new THREE.CylinderGeometry(K.rand(18, 36), K.rand(24, 42), h, 9), this.M.rock, { x: side * K.rand(60, 170), y: h / 2 - 2, z: -K.rand(220, 320), cast: false });
+      const mesa = K.rock(K.rand(26, 40), this.M.rock, { detail: 3, rough: 0.22, flat: 1, mesa: K.rand(0.25, 0.5), bands: true });
+      mesa.scale.set(K.rand(1.1, 1.8), h / 40, 1);
+      mesa.position.set(side * K.rand(60, 170), -2, -K.rand(220, 320));
+      mesa.castShadow = false;
       s.add(mesa);
     }
 

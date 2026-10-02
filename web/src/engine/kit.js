@@ -1,5 +1,6 @@
 // Shared 3D toolkit: textures, materials, lighting, sky, props and particles.
 import * as THREE from "three";
+import { mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
 
 // ---------- randomness ----------
 
@@ -18,6 +19,55 @@ export const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 export const lerp = (a, b, t) => a + (b - a) * t;
 export const damp = (a, b, lambda, dt) => lerp(a, b, 1 - Math.exp(-lambda * dt));
+
+// ---------- noise ----------
+
+function hash3(x, y, z) {
+  let h = (x * 374761393 + y * 668265263 + z * 2147483647) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+
+/** Smooth 3D value noise in [-1, 1]. */
+export function noise3(x, y, z) {
+  const xi = Math.floor(x), yi = Math.floor(y), zi = Math.floor(z);
+  const xf = x - xi, yf = y - yi, zf = z - zi;
+  const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf), w = zf * zf * (3 - 2 * zf);
+  let out = 0;
+  for (let dx = 0; dx <= 1; dx++) for (let dy = 0; dy <= 1; dy++) for (let dz = 0; dz <= 1; dz++) {
+    const weight = (dx ? u : 1 - u) * (dy ? v : 1 - v) * (dz ? w : 1 - w);
+    out += weight * hash3(xi + dx, yi + dy, zi + dz);
+  }
+  return out * 2 - 1;
+}
+
+/** Fractal noise: several octaves of noise3, roughly in [-1, 1]. */
+export function fbm(x, y, z, octaves = 4) {
+  let sum = 0, amp = 0.5, freq = 1, norm = 0;
+  for (let i = 0; i < octaves; i++) {
+    sum += amp * noise3(x * freq, y * freq, z * freq);
+    norm += amp; amp *= 0.5; freq *= 2.03;
+  }
+  return sum / norm;
+}
+
+/** A sphere with shared (welded) vertices, so displacing it keeps the surface whole. */
+function weldedSphere(detail) {
+  let geo = new THREE.IcosahedronGeometry(1, detail);
+  geo.deleteAttribute("normal");
+  geo.deleteAttribute("uv");
+  return mergeVertices(geo);
+}
+
+/** Planar UVs from position, so textured materials still work on sculpted shapes. */
+function boxUV(geo, scale) {
+  const p = geo.attributes.position, uv = new Float32Array(p.count * 2);
+  for (let i = 0; i < p.count; i++) {
+    uv[i * 2] = (p.getX(i) + p.getZ(i) * 0.7) * scale;
+    uv[i * 2 + 1] = p.getY(i) * scale;
+  }
+  geo.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
+}
 
 // ---------- canvas textures ----------
 
@@ -227,21 +277,128 @@ export class Particles {
 // ---------- props ----------
 
 export function rockMaterial(color = "#b8643a", seed = 3) {
-  const map = noiseTexture(color, ["#6b3a22", "#d9895a", "#8f5232", "#5a2f1b"], { size: 256, count: 1600, radius: 7, seed });
-  return mat("#ffffff", { rough: 0.95, map });
+  const map = noiseTexture("#e2dbd4", ["#a59b92", "#f5f0ea", "#c2b8ae"], { size: 256, count: 2200, radius: 3, seed, repeat: [1, 1], alpha: [0.06, 0.22] });
+  const m = mat("#ffffff", { rough: 0.95, map });
+  m.vertexColors = true;
+  m.userData.base = new THREE.Color(color);
+  return m;
 }
 
-export function rock(radius, material) {
-  const geo = new THREE.IcosahedronGeometry(radius, 1);
-  const p = geo.attributes.position;
-  const r = seeded(Math.floor(Math.random() * 1e6));
+/** Paints a sculpted shape: sedimentary bands for warm rock, plain mottling for grey. */
+function paintRock(geo, material, seed, bands) {
+  const base = material.userData.base ?? new THREE.Color("#a0a0a0");
+  const p = geo.attributes.position, n = geo.attributes.normal, col = new Float32Array(p.count * 3);
+  const c = new THREE.Color(), dark = base.clone().multiplyScalar(0.62), light = base.clone().lerp(new THREE.Color("#f3dcc2"), 0.35);
   for (let i = 0; i < p.count; i++) {
-    const s = 0.8 + r() * 0.35;
-    p.setXYZ(i, p.getX(i) * s, p.getY(i) * s * 0.75, p.getZ(i) * s);
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+    const mottle = fbm(x * 0.9 + seed, y * 0.9, z * 0.9, 3);
+    if (bands) {
+      // Sharp-ish sedimentary layers of varying thickness.
+      const yy = y + fbm(x * 0.3, y * 0.15, z * 0.3 + seed, 2) * 1.2;
+      const layer = Math.pow(Math.sin(yy * 1.9) * 0.5 + 0.5, 2.2) * 0.7 + (Math.sin(yy * 5.3 + 1.7) * 0.5 + 0.5) * 0.3;
+      c.copy(dark).lerp(light, layer * 0.85 + 0.08 + mottle * 0.1);
+    } else {
+      c.copy(base).multiplyScalar(0.85 + mottle * 0.25);
+    }
+    // Ambient-occlusion-ish: undersides and bases a little darker.
+    c.multiplyScalar(0.78 + 0.22 * Math.max(0, n.getY(i) * 0.5 + 0.5));
+    col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
+  }
+  geo.setAttribute("color", new THREE.BufferAttribute(col, 3));
+}
+
+/**
+ * A natural-looking boulder or rock pillar.
+ * flat: vertical squash; mesa: flatten the top above this height (0..1) into a plateau.
+ */
+export function rock(radius, material, { detail = 3, rough = 0.32, flat = 0.75, mesa = null, bands = null, seed = Math.random() * 100 } = {}) {
+  const geo = weldedSphere(detail);
+  const p = geo.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+    let d = 1 + rough * fbm(x * 1.4 + seed, y * 1.4, z * 1.4 - seed, 4);
+    let ny = y * flat;
+    if (mesa !== null && ny > mesa * flat) ny = mesa * flat + (ny - mesa * flat) * 0.08;
+    if (ny < -0.35 * flat) ny = -0.35 * flat; // sits on the ground
+    p.setXYZ(i, x * d * radius, ny * d * radius, z * d * radius);
   }
   geo.computeVertexNormals();
+  boxUV(geo, 0.25 / Math.max(radius * 0.25, 0.5));
+  paintRock(geo, material, seed, bands ?? material.userData.base?.r > material.userData.base?.b);
   const m = mesh(geo, material, { receive: true });
   m.rotation.y = Math.random() * Math.PI * 2;
+  return m;
+}
+
+/**
+ * A painted mountain panorama on the inside of a cylinder arc, for horizons
+ * that are too far away for 3D detail to matter (how most games do it).
+ * Several ranges, farthest first: bluer and hazier with distance, snow on
+ * the upper slopes, darker rock streaks in the gullies.
+ */
+export function mountainBackdrop({ radius = 320, height = 150, arc = Math.PI * 0.9, y = -12, seed = 7,
+  rock = "#56606f", snow = "#f3f6fb", haze = "#c9d6e8", layers = 3 } = {}) {
+  const W = 2048, H = 512;
+  const tex = canvasTexture(W, H, (g) => {
+    const hazeC = new THREE.Color(haze);
+    for (let L = 0; L < layers; L++) {
+      const far = 1 - L / Math.max(layers - 1, 1); // 1 = farthest
+      const tint = (hex, amount) => "#" + new THREE.Color(hex).lerp(hazeC, amount).getHexString();
+      const rockC = tint(rock, 0.25 + far * 0.55), snowC = tint(snow, far * 0.35), shadeC = tint("#3a4250", 0.3 + far * 0.55);
+      const top = H * (0.1 + L * 0.16), base = H * (0.6 + L * 0.12);
+      const ridge = new Float32Array(W);
+      for (let x = 0; x < W; x++) {
+        const u = x / W * (6 + L * 3);
+        // Ridged peaks: sharp tops, smooth valleys.
+        const n = 1 - Math.abs(fbm(u + seed + L * 10, L * 3.1, 0.5, 5));
+        ridge[x] = top + (base - top) * (1 - Math.pow(n, 1.6)) * 0.95;
+      }
+      for (let x = 0; x < W; x++) {
+        const r = ridge[x];
+        // Rock body.
+        g.fillStyle = rockC;
+        g.fillRect(x, r, 1, H - r);
+        // Snow from the ridge down to a wavy snow line (deeper on high peaks).
+        const peak = 1 - (r - top) / (base - top);
+        const depth = (base - r) * (0.12 + 0.45 * peak) * (0.7 + 0.45 * fbm(x / 30 + seed, L, 1.3, 3));
+        g.fillStyle = snowC;
+        g.fillRect(x, r, 1, Math.max(0, depth));
+        // Shadowed faces: where the ridge rises to the right, the slope faces away from the sun.
+        const slope = (ridge[Math.min(W - 1, x + 3)] - ridge[Math.max(0, x - 3)]) / 6;
+        if (slope < -0.15) {
+          g.globalAlpha = Math.min(0.45, -slope * 0.25);
+          g.fillStyle = shadeC;
+          g.fillRect(x, r, 1, H - r);
+          g.globalAlpha = 1;
+        }
+      }
+      // Gully streaks running down from the snow.
+      const rnd = seeded(seed * 13 + L);
+      g.strokeStyle = shadeC;
+      for (let k = 0; k < 220; k++) {
+        const x = rnd() * W, r = ridge[Math.floor(x)];
+        g.globalAlpha = 0.08 + rnd() * 0.12;
+        g.lineWidth = 0.6 + rnd() * 1.4;
+        g.beginPath(); g.moveTo(x, r + 4 + rnd() * 14);
+        g.lineTo(x + (rnd() - 0.5) * 24, r + 20 + rnd() * (base - r) * 0.5);
+        g.stroke();
+      }
+      g.globalAlpha = 1;
+      // Haze at the foot of each range.
+      const grad = g.createLinearGradient(0, base - 40, 0, H);
+      grad.addColorStop(0, "#" + hazeC.getHexString() + "00");
+      grad.addColorStop(1, "#" + hazeC.getHexString() + "ee");
+      g.fillStyle = grad;
+      g.fillRect(0, base - 40, W, H - base + 40);
+    }
+  });
+  tex.wrapS = THREE.ClampToEdgeWrapping;
+  const geo = new THREE.CylinderGeometry(radius, radius, height, 96, 1, true, Math.PI - arc / 2, arc); // centered straight ahead (-z)
+  const material = new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide, fog: false, transparent: true, depthWrite: false });
+  // The canvas is left transparent above the ridges, so the sky shows through.
+  const m = new THREE.Mesh(geo, material);
+  m.position.y = y + height / 2;
+  m.renderOrder = -1;
   return m;
 }
 
