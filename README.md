@@ -53,6 +53,11 @@ A ring in the live view fills up while you hold a gesture. If you walk out of vi
 | ⛷️ **Alpine Rush** | Pro | Ski downhill through gates. Lean to steer, jump rocks, crouch into a tuck for speed. |
 | 🥊 **Boxing Blitz** | Pro | A 75-second cardio round. Punch the pads, duck the swinging bag, build multipliers. |
 
+## Accounts and multiplayer
+
+- **Accounts:** everyone signs up with a username and password the first time (it takes a few seconds). An optional recovery email lets players reset a forgotten password with an emailed 6-digit code. Pro access, stats and best scores follow the account to every device.
+- **Play with friends:** in the menu, **Play with friends → Create a party** shows a 4-letter code. Friends enter it on their own Mac, iPad or computer. The host picks the game and starts; everyone counts down together, scores show live, and the party sees the final ranking. Up to 4 players, or 8 when the host has Pro (a Pro host also unlocks Pro games for the party).
+
 ## Pro plan and moderators
 
 Paid plans aren't live yet. Pro games show a lock and a "Pro is coming soon" card. Until payments launch, **moderators can give any player Pro or a trial for free**.
@@ -61,11 +66,11 @@ Paid plans aren't live yet. Pro games show a lock and a "Pro is coming soon" car
 2. You'll see every player who has opened MoveCam:
    - totals: players, active today, Pro/trial players, games played
    - a searchable list showing last seen, number of games and favorite game
-3. Type a player's **MoveCam ID** (they find it in **Settings → Account**, or on the Pro card when they pick a locked game) to search, then click them.
+3. Type a player's **username** to search, then click them.
 4. The player page shows sessions, play time, per-game plays and best scores, and their recent activity. Use **Give Pro**, **Give Trial** (choose the number of days) or **Remove**. The player's app picks it up within a few minutes.
 5. **Change Password** in the panel's toolbar changes the moderator password and signs out any other open panels. After 8 wrong guesses, the panel locks for 15 minutes.
 
-Players can turn off sharing play stats in **Settings → Account**. Only game names, scores and play time are collected, tied to the random MoveCam ID: never video or personal information.
+Players can turn off sharing play stats in **Settings → Account**. Only game names, scores and play time are collected, tied to the player's account: never video.
 
 ### The server
 
@@ -74,6 +79,8 @@ The website, web app, moderator panel, player list and Pro checks are served fro
 - `server/public/`: the landing page, download page and web app (built by `web/`, committed)
 - `server/functions/api/`: Pages Functions for check-in, activity and the moderator API
 - Storage: a Cloudflare KV namespace bound as `DB` (see `server/wrangler.toml`)
+
+Multiplayer rooms (Durable Objects) and email sending live in a small private Worker, [`server/backend`](server/backend) (`movecam-backend`), deployed with `cd server && npx wrangler deploy --config backend/wrangler.toml`. Password-reset emails use Cloudflare Email Service: enable **Email Sending** for `bhswebsite.org` in the Cloudflare dashboard once.
 
 The Pages project is connected to this GitHub repo, so every push to `main` redeploys it. The moderator password and session secret are encrypted Cloudflare secrets, never in the app. To set them (once):
 
@@ -127,7 +134,7 @@ The Xcode project is generated from [`project.yml`](project.yml) and isn't commi
 | `MoveCam/Views` | Live view with outline, Settings |
 | `web/src` | Shared games, menu, HUD, audio and the JS motion interpreter |
 | `web/site` | Landing and download pages |
-| `MoveCam/Account`, `MoveCam/Moderator` | MoveCam IDs, Pro entitlements, moderator panel |
+| `MoveCam/Account`, `MoveCam/Moderator` | Account bridge, Pro entitlements, moderator panel |
 | `MoveCam/Updates` | Self-updater that installs new releases from GitHub |
 
 `MoveCam --render-previews <dir>` loads each game in the app's WebView and saves screenshots. CI runs this and uploads them as the `game-previews` artifact.
