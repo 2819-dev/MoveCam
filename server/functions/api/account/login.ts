@@ -1,5 +1,5 @@
 import {
-  clearLoginFailures, clientIP, getAccount, handler, issueAccountToken, json, loginAllowed, makeHash, readJSON,
+  clearLoginFailures, clientIP, findAccount, handler, issueAccountToken, json, loginAllowed, makeHash, readJSON,
   recordLoginFailure, saveAccount, sessionPayload, verifyHash,
 } from "../../../lib/store";
 
@@ -8,7 +8,7 @@ export const onRequestPost = handler(async (req) => {
   const name = typeof body?.username === "string" ? body.username.trim() : "";
   const key = `login:${clientIP(req)}:${name.toLowerCase()}`;
   if (!(await loginAllowed(key))) return json({ error: "Too many wrong passwords. Try again in 15 minutes." }, 429);
-  const account = name ? await getAccount(name) : null;
+  const account = name ? await findAccount(name) : null;
   if (!account || !(await verifyHash(body?.password, account))) {
     await recordLoginFailure(key);
     await new Promise((r) => setTimeout(r, 600));

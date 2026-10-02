@@ -10,6 +10,8 @@ final class EntitlementService: ObservableObject {
     }
 
     @Published private(set) var userID: String
+    /// The signed-in account's username (accounts are managed by the game UI).
+    @Published private(set) var username: String? = UserDefaults.standard.string(forKey: "accountUsername")
     @Published private(set) var plan: Plan
     @Published private(set) var proExpiry: Date?
     @Published private(set) var lastChecked: Date?
@@ -43,8 +45,10 @@ final class EntitlementService: ObservableObject {
 
     /// Signing in to an account switches this Mac to the account's player ID
     /// (so Pro and stats follow the player); signing out (nil) switches back.
-    func adopt(playerID: String?) {
+    func adopt(playerID: String?, username: String? = nil) {
         let defaults = UserDefaults.standard
+        self.username = playerID == nil ? nil : username
+        defaults.set(self.username, forKey: "accountUsername")
         let target = playerID.flatMap { UserIDFormat.isValid($0) ? $0 : nil }
             ?? defaults.string(forKey: Self.deviceKey) ?? userID
         guard target != userID else { return }

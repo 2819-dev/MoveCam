@@ -1,12 +1,12 @@
-import { handler, json, normalizeId, readJSON, requireModerator, store } from "../../../lib/store";
+import { handler, json, readJSON, requireModerator, resolvePlayer, store } from "../../../lib/store";
 
 // Moderator: give Pro (forever or for N days), a trial, or remove it.
 export const onRequestPost = handler(async (req) => {
   const denied = await requireModerator(req);
   if (denied) return denied;
   const body = await readJSON(req);
-  const id = normalizeId(body?.userId);
-  if (!id) return json({ error: "Bad user id" }, 400);
+  const id = await resolvePlayer(body?.username ?? body?.userId);
+  if (!id) return json({ error: "No player with that username" }, 404);
   if (body?.plan === "free") {
     await store.delete(`grants/${id}`);
     return json({ ok: true, plan: "free" });

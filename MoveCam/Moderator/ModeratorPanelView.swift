@@ -79,7 +79,7 @@ private struct ModeratorDashboard: View {
                 }
                 HStack {
                     Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                    TextField("Search by username or MoveCam ID (MC-AB12-CD34)", text: $search)
+                    TextField("Search by username", text: $search)
                         .textFieldStyle(.plain)
                         .onSubmit(openExactMatch)
                     if client.isLoading { ProgressView().controlSize(.small) }
@@ -203,9 +203,8 @@ private struct UserRow: View {
                 HStack(spacing: 6) {
                     if let name = user.username {
                         Text(name).font(.body.weight(.semibold))
-                        Text(user.id).font(.system(.caption, design: .monospaced)).foregroundStyle(.secondary)
                     } else {
-                        Text(user.id).font(.system(.body, design: .monospaced).weight(.semibold))
+                        Text("Guest (from before accounts)").font(.body.weight(.semibold)).foregroundStyle(.secondary)
                     }
                     PlanTag(plan: user.plan)
                 }
@@ -295,17 +294,14 @@ private struct UserDetailView: View {
     private func header(_ d: ModeratorClient.UserDetail) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                if let name = d.user.username {
-                    Text(name).font(.title.bold()).textSelection(.enabled)
-                    Text(d.user.id).font(.system(.title3, design: .monospaced)).foregroundStyle(.secondary).textSelection(.enabled)
-                } else {
-                    Text(d.user.id).font(.system(.title, design: .monospaced).bold()).textSelection(.enabled)
-                }
+                Text(d.user.username ?? "Guest (from before accounts)").font(.title.bold()).textSelection(.enabled)
                 PlanTag(plan: d.plan)
                 Spacer()
-                Button("Copy ID") {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(d.user.id, forType: .string)
+                if let name = d.user.username {
+                    Button("Copy username") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(name, forType: .string)
+                    }
                 }
             }
             Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 6) {

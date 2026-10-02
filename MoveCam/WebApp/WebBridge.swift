@@ -141,7 +141,7 @@ final class WebBridge: NSObject, ObservableObject, WKScriptMessageHandler, WKNav
                                      seconds: (event["seconds"] as? NSNumber)?.doubleValue)
             }
         case "account":
-            entitlements.adopt(playerID: body["playerId"] as? String)
+            entitlements.adopt(playerID: body["playerId"] as? String, username: body["username"] as? String)
         case "selectCamera":
             if let id = body["id"] as? String { camera.select(id) }
         case "installUpdate":

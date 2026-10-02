@@ -10,6 +10,7 @@ const CORS = {
 export const onRequest = async ({ request, next }: { request: Request; next: () => Promise<Response> }) => {
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
   const response = await next();
+  if (response.status === 101) return response; // WebSocket handshakes pass through untouched
   const out = new Response(response.body, response);
   for (const [k, v] of Object.entries(CORS)) out.headers.set(k, v);
   return out;

@@ -1,0 +1,22 @@
+# Internal Worker used by the Pages site (server/): sends email and hosts
+# multiplayer party rooms. It has no public URL; only the site can call it.
+name = "movecam-backend"
+main = "src/index.ts"
+compatibility_date = "2026-09-01"
+workers_dev = false
+preview_urls = false
+
+[[durable_objects.bindings]]
+name = "PARTY"
+class_name = "Party"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Party"]
+
+# Cloudflare Email Service (the sending domain must be onboarded in the dashboard).
+[[send_email]]
+name = "EMAIL"
+
+[vars]
+EMAIL_FROM = "noreply@bhswebsite.org"

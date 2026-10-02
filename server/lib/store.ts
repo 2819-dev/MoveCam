@@ -10,7 +10,20 @@ type KV = {
   list(options: { prefix: string; cursor?: string }): Promise<{ keys: { name: string }[]; list_complete: boolean; cursor?: string }>;
 };
 
-export type Env = { DB: KV; MODERATOR_PASSWORD?: string; SESSION_SECRET?: string };
+type Fetcher = { fetch(input: string | Request, init?: RequestInit): Promise<Response> };
+type DurableNamespace = { idFromName(name: string): unknown; get(id: unknown): Fetcher };
+
+export type Env = {
+  DB: KV;
+  MODERATOR_PASSWORD?: string;
+  SESSION_SECRET?: string;
+  /** movecam-backend Worker: sends email (Cloudflare Email Service). */
+  BACKEND?: Fetcher;
+  /** Multiplayer party rooms (Durable Objects in movecam-backend). */
+  PARTY?: DurableNamespace;
+};
+
+export function bindings() { return env; }
 
 type Context = { request: Request; env: Env };
 
@@ -240,10 +253,10 @@ export async function requireModerator(req: Request): Promise<Response | null> {
 type Throttle = { fails: number; since: number };
 const LOCKOUT_MS = 15 * 60_000;
 
-export async function loginAllowed(ip: string) {
+export async function loginAllowed(ip: string, max = 8) {
   const rec = await store.get<Throttle>(`throttle/${ip}`);
   if (!rec || Date.now() - rec.since > LOCKOUT_MS) return true;
-  return rec.fails < 8;
+  return rec.fails < max;
 }
 
 export async function recordLoginFailure(ip: string) {
@@ -267,6 +280,8 @@ export type Account = Hashed & {
   lastLogin: string;
   /** Bumped by "sign out everywhere" and password changes. */
   sessions: number;
+  /** Optional, lowercased; used to recover the account. */
+  email?: string;
 };
 
 export const USERNAME = /^[A-Za-z0-9_]{3,16}$/;
@@ -318,8 +333,76 @@ export async function sessionPayload(account: Account, token?: string) {
     ...(token ? { token } : {}),
     username: account.username,
     avatar: account.avatar,
+    email: account.email ?? null,
     playerId: account.playerId,
     ...activePlan(await getGrant(account.playerId)),
     best,
   };
+}
+
+// ---------- email & recovery ----------
+
+export const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,190}\.[a-z]{2,24}$/i;
+
+export function normalizeEmail(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const e = raw.trim().toLowerCase();
+  return EMAIL.test(e) ? e : null;
+}
+
+export async function accountByEmail(email: string) {
+  const name = await store.get<string>(`emails/${email}`);
+  return name ? getAccount(name) : null;
+}
+
+/** Sets (or with null, removes) an account's recovery email, keeping the email index in step. */
+export async function setAccountEmail(account: Account, email: string | null): Promise<string | null> {
+  if (email) {
+    const owner = await store.get<string>(`emails/${email}`);
+    if (owner && owner !== account.username.toLowerCase()) return "That email is already used by another account";
+  }
+  if (account.email && account.email !== email) await store.delete(`emails/${account.email}`);
+  if (email) await store.set(`emails/${email}`, account.username.toLowerCase());
+  account.email = email ?? undefined;
+  return null;
+}
+
+/** Sends an email through the movecam-backend Worker. Returns false if email isn't set up. */
+export async function sendEmail(to: string, subject: string, text: string, html: string) {
+  if (!env.BACKEND) return false;
+  try {
+    const res = await env.BACKEND.fetch("https://backend/email", {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ to, subject, text, html }),
+    });
+    if (!res.ok) console.error("email failed", res.status, await res.text());
+    return res.ok;
+  } catch (err) {
+    console.error("email failed", err);
+    return false;
+  }
+}
+
+export function resetCode() {
+  const n = randomBytes(4).readUInt32BE(0) % 1_000_000;
+  return String(n).padStart(6, "0");
+}
+
+export function hashCode(code: string) {
+  return createHmac("sha256", secret()).update("reset:" + code).digest("hex");
+}
+
+/** Finds an account by username or by recovery email. */
+export async function findAccount(raw: unknown) {
+  if (typeof raw !== "string" || !raw.trim()) return null;
+  const v = raw.trim().replace(/^@/, "");
+  const email = normalizeEmail(v);
+  return email ? accountByEmail(email) : getAccount(v);
+}
+
+/** Resolves a moderator's "who": a username (or @username), or a legacy MC- ID. */
+export async function resolvePlayer(raw: unknown): Promise<string | null> {
+  const id = normalizeId(raw);
+  if (id) return id;
+  const account = typeof raw === "string" ? await getAccount(raw.trim().replace(/^@/, "")) : null;
+  return account?.playerId ?? null;
 }

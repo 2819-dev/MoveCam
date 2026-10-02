@@ -30,6 +30,7 @@ const account = {
   expiresAt: loadSetting("planExpiry", null),
   username: loadSetting("username", null),
   avatar: loadSetting("avatar", 0),
+  email: loadSetting("email", null),
   token: loadSetting("token", null),
   get signedIn() { return !!(this.token && this.username); },
   get isPro() {
@@ -65,6 +66,7 @@ function applySession(s) {
   if (s.token) { account.token = s.token; saveSetting("token", s.token); }
   account.username = s.username; saveSetting("username", s.username);
   account.avatar = s.avatar ?? 0; saveSetting("avatar", account.avatar);
+  account.email = s.email ?? null; saveSetting("email", account.email);
   if (s.playerId && s.playerId !== account.id) {
     if (!account.deviceId) { account.deviceId = account.id; saveSetting("deviceId", account.deviceId); }
     account.id = s.playerId; saveSetting("userId", s.playerId);
@@ -73,25 +75,27 @@ function applySession(s) {
   for (const [game, best] of Object.entries(s.best ?? {})) {
     if (best > bestScore(game)) saveSetting("best." + game, best);
   }
-  if (native) postToNative({ type: "account", playerId: account.id });
+  if (native) postToNative({ type: "account", playerId: account.id, username: account.username });
   setPlan(s.plan ?? "free", s.expiresAt ?? null);
 }
 
 function signOut(message) {
-  account.token = null; account.username = null;
-  saveSetting("token", null); saveSetting("username", null);
+  leaveParty();
+  account.token = null; account.username = null; account.email = null;
+  saveSetting("token", null); saveSetting("username", null); saveSetting("email", null);
   if (account.deviceId) { account.id = account.deviceId; saveSetting("userId", account.id); }
-  if (native) postToNative({ type: "account", playerId: null });
+  if (native) postToNative({ type: "account", playerId: null, username: null });
   setPlan("free", null);
   if (message) toast(message);
-  checkin(false);
+  if (state.screen === "game") backToMenu();
+  requireSignIn();
 }
 
 async function refreshAccount() {
   if (!account.signedIn) return;
   const r = await api("/api/account/me", { auth: true });
   if (r.ok) applySession(r.data);
-  else if (r.status === 401) signOut("You were signed out. Sign in again to get your scores and Pro back.");
+  else if (r.status === 401) signOut("You were signed out. Sign in again to keep playing.");
 }
 
 function avatarHTML(size = 30) {
@@ -187,6 +191,7 @@ const menu = $(`<div id="menu">
     </div>
     <h1>Games</h1>
     <div class="sub">Swing an arm out to the side to choose. Raise a hand to play. Or just tap.</div>
+    <button class="btn party-btn" id="partyBtn">👥 Play with friends</button>
   </header>
   <div class="carousel" id="carousel"></div>
   <div class="hints">
@@ -254,6 +259,7 @@ function renderMenu() {
   badge.style.color = account.isPro ? "#000" : "";
   menu.querySelector("#musicBtn").textContent = audio.settings.music ? "♫" : "♫̸";
   menu.querySelector("#profileBtn").innerHTML = avatarHTML(24) + `<span>${account.signedIn ? esc(account.username) : "Sign in"}</span>`;
+  menu.querySelector("#partyBtn").innerHTML = party.view ? `👥 Party ${party.view.code} · ${party.view.players.length} in` : "👥 Play with friends";
 }
 
 function moveSelection(d) {
@@ -267,6 +273,7 @@ function moveSelection(d) {
 menu.querySelector("#musicBtn").addEventListener("click", () => { audio.unlock(); audio.set("music", !audio.settings.music); renderMenu(); });
 menu.querySelector("#settingsBtn").addEventListener("click", () => openSettings());
 menu.querySelector("#profileBtn").addEventListener("click", () => { audio.unlock(); openAccount(); });
+menu.querySelector("#partyBtn").addEventListener("click", () => { audio.unlock(); if (requireSignIn()) openParty(); });
 menu.querySelector("#fullBtn").addEventListener("click", () => {
   if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen?.();
 });
@@ -294,20 +301,22 @@ function showProCard() {
   const el = $(`<div class="scrim"><div class="panel">
     <span class="tag pro">PRO</span>
     <h2>${esc(info.title)} is part of MoveCam Pro</h2>
-    <p>Pro isn't on sale yet. Want early access? Send your ${account.signedIn ? "username" : "MoveCam ID"} to a moderator and they can unlock it for you.</p>
-    <div class="idbox"><span>${account.signedIn ? esc(account.username) : account.id}</span><button class="btn" id="copyId">Copy</button></div>
-    ${account.signedIn ? "" : `<p style="font-size:13px">Tip: <a href="#" id="proSignIn">create an account</a> so Pro follows you to every device.</p>`}
+    <p>Pro isn't on sale yet. Want early access? Send your username to a moderator and they can unlock it for you.</p>
+    <div class="idbox"><span>${esc(account.username ?? "")}</span><button class="btn" id="copyId">Copy</button></div>
     <button class="btn accent big" id="okBtn">OK</button>
     <p style="font-size:12px;color:var(--tertiary)">Raise a hand or press Space to close</p></div></div>`);
-  el.querySelector("#copyId").addEventListener("click", () => navigator.clipboard?.writeText(account.signedIn ? account.username : account.id));
-  el.querySelector("#proSignIn")?.addEventListener("click", (e) => { e.preventDefault(); openAccount("signup"); });
+  el.querySelector("#copyId").addEventListener("click", () => navigator.clipboard?.writeText(account.username ?? ""));
   el.querySelector("#okBtn").addEventListener("click", closeOverlay);
   el.addEventListener("click", (e) => { if (e.target === el) closeOverlay(); });
   el.dataset.kind = "pro";
   showOverlay(el);
 }
 
-function openAccount(mode = "signin") {
+/**
+ * The account sheet. Signed out it's sign-in / create account / forgot password;
+ * with gate=true it can't be dismissed (an account is needed to play).
+ */
+function openAccount(mode = "signup", { gate = false } = {}) {
   const swatches = (selected) => AVATAR_COLORS.map((c, i) =>
     `<button type="button" class="swatch ${i === selected ? "on" : ""}" data-i="${i}" style="background:${c}" aria-label="Color ${i + 1}"></button>`).join("");
   let el;
@@ -316,6 +325,8 @@ function openAccount(mode = "signin") {
     el = $(`<div class="scrim"><div class="panel account">
       <div class="who">${avatarHTML(72)}<div><h2>${esc(account.username)}</h2><p>${planText}</p></div></div>
       <div class="field"><label>Color</label><div class="swatches">${swatches(account.avatar)}</div></div>
+      <form class="mail field"><label>Recovery email <small>Only used to reset your password</small></label>
+        <div class="inline"><input name="email" type="email" placeholder="you@example.com" value="${esc(account.email ?? "")}" autocomplete="email"><button class="btn" type="submit">Save</button></div></form>
       <details><summary>Change password</summary>
         <form class="pw"><input name="current" type="password" placeholder="Current password" autocomplete="current-password">
         <input name="next" type="password" placeholder="New password (6+ characters)" autocomplete="new-password">
@@ -333,6 +344,12 @@ function openAccount(mode = "signin") {
       const r = await api("/api/account/profile", { method: "POST", body: { avatar: i }, auth: true });
       if (!r.ok) err.textContent = r.data.error ?? "Couldn't save your color.";
     }));
+    el.querySelector("form.mail").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const r = await api("/api/account/profile", { method: "POST", auth: true, body: { email: e.target.email.value.trim() } });
+      if (r.ok) { applySession(r.data); err.textContent = ""; toast(r.data.email ? "Recovery email saved." : "Recovery email removed."); }
+      else err.textContent = r.data.error ?? "Couldn't save your email.";
+    });
     el.querySelector("form.pw").addEventListener("submit", async (e) => {
       e.preventDefault();
       const f = e.target;
@@ -340,63 +357,130 @@ function openAccount(mode = "signin") {
       if (r.ok) { applySession(r.data); f.reset(); el.querySelector("details").open = false; err.textContent = ""; toast("Password changed. Other devices are signed out."); }
       else err.textContent = r.data.error ?? "Couldn't change your password.";
     });
-    el.querySelector("#signOutBtn").addEventListener("click", () => { closeOverlay(); signOut("Signed out. Scores and Pro stay with your account."); });
+    el.querySelector("#signOutBtn").addEventListener("click", () => { closeOverlay(); signOut(); });
     el.querySelector("#doneBtn").addEventListener("click", closeOverlay);
   } else {
     let avatar = Math.floor(Math.random() * AVATAR_COLORS.length);
     el = $(`<div class="scrim"><div class="panel account">
-      <h2>Your MoveCam account</h2>
-      <p>Keep your best scores and Pro on every device: Mac, iPad and the web.</p>
-      <div class="seg"><button type="button" data-m="signin">Sign in</button><button type="button" data-m="signup">Create account</button></div>
+      <img class="logo" src="${ASSETS}icons/icon-180.png" alt="">
+      <h2 class="title"></h2>
+      <p class="lead"></p>
+      <div class="seg"><button type="button" data-m="signup">Create account</button><button type="button" data-m="signin">Sign in</button></div>
       <form class="auth">
-        <input name="username" placeholder="Username" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false" maxlength="16">
+        <input name="username" placeholder="Username" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false" maxlength="40">
         <input name="password" type="password" placeholder="Password">
+        <input name="email" type="email" class="signup-only" placeholder="Email for password recovery (optional)" autocomplete="email">
         <div class="field signup-only"><label>Pick a color</label><div class="swatches">${swatches(avatar)}</div></div>
         <div class="err"></div>
         <button class="btn accent big" type="submit"></button>
+        <button type="button" class="link signin-only" id="forgotBtn">Forgot password?</button>
       </form>
-      <button class="link" id="notNow">Not now</button>
+      <form class="forgot hidden">
+        <input name="who" placeholder="Username or email" autocapitalize="off" autocorrect="off" spellcheck="false">
+        <div class="code-step hidden">
+          <input name="code" inputmode="numeric" maxlength="6" placeholder="6-digit code from the email">
+          <input name="next" type="password" placeholder="New password (6+ characters)" autocomplete="new-password">
+        </div>
+        <div class="err"></div>
+        <button class="btn accent big" type="submit">Email me a code</button>
+        <button type="button" class="link" id="backToSignIn">Back to sign in</button>
+      </form>
+      ${gate ? "" : `<button class="link" id="notNow">Not now</button>`}
     </div></div>`);
-    const form = el.querySelector("form.auth");
-    const err = el.querySelector(".err");
+    const form = el.querySelector("form.auth"), forgot = el.querySelector("form.forgot");
+    const err = form.querySelector(".err"), ferr = forgot.querySelector(".err");
     const setMode = (m) => {
       mode = m;
+      const forgotMode = m === "forgot";
+      form.classList.toggle("hidden", forgotMode);
+      forgot.classList.toggle("hidden", !forgotMode);
+      el.querySelector(".seg").classList.toggle("hidden", forgotMode);
       el.querySelectorAll(".seg button").forEach((b) => b.classList.toggle("on", b.dataset.m === m));
-      el.querySelector(".signup-only").classList.toggle("hidden", m !== "signup");
+      el.querySelectorAll(".signup-only").forEach((x) => x.classList.toggle("hidden", m !== "signup"));
+      el.querySelectorAll(".signin-only").forEach((x) => x.classList.toggle("hidden", m !== "signin"));
+      el.querySelector(".title").textContent = forgotMode ? "Reset your password" : m === "signup" ? "Welcome to MoveCam" : "Welcome back";
+      el.querySelector(".lead").textContent = forgotMode
+        ? "We'll email a code to your account's recovery email."
+        : m === "signup" ? "Pick a username to start playing. Your scores and Pro follow you to every device." : "Sign in with your username (or email) and password.";
       form.querySelector("button[type=submit]").textContent = m === "signup" ? "Create account" : "Sign in";
+      form.username.placeholder = m === "signup" ? "Username" : "Username or email";
       form.password.placeholder = m === "signup" ? "Password (6+ characters)" : "Password";
       form.password.autocomplete = m === "signup" ? "new-password" : "current-password";
-      err.textContent = "";
+      err.textContent = ""; ferr.textContent = "";
+      setTimeout(() => (forgotMode ? forgot.who : form.username).focus(), 30);
     };
     el.querySelectorAll(".seg button").forEach((b) => b.addEventListener("click", () => setMode(b.dataset.m)));
     el.querySelectorAll(".swatch").forEach((b) => b.addEventListener("click", () => {
       avatar = Number(b.dataset.i);
       el.querySelectorAll(".swatch").forEach((x) => x.classList.toggle("on", x === b));
     }));
-    form.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const username = form.username.value.trim(), password = form.password.value;
-      if (!/^[A-Za-z0-9_]{3,16}$/.test(username)) { err.textContent = "Usernames are 3 to 16 letters, numbers or _"; return; }
-      if (mode === "signup" && password.length < 6) { err.textContent = "Passwords need at least 6 characters"; return; }
-      const submit = form.querySelector("button[type=submit]");
-      submit.disabled = true; err.textContent = "";
-      const r = mode === "signup"
-        ? await api("/api/account/signup", { method: "POST", body: { username, password, avatar, playerId: account.id } })
-        : await api("/api/account/login", { method: "POST", body: { username, password } });
-      submit.disabled = false;
-      if (!r.ok) { err.textContent = r.data.error ?? "Something went wrong. Try again."; return; }
+    const welcome = (r, text) => {
       applySession(r.data);
       closeOverlay();
       audio.play("confirm");
-      toast(mode === "signup" ? `Welcome to MoveCam, ${account.username}!` : `Welcome back, ${account.username}!`);
+      toast(text);
+      afterSignIn();
+    };
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const username = form.username.value.trim(), password = form.password.value, email = form.email.value.trim();
+      if (mode === "signup") {
+        if (!/^[A-Za-z0-9_]{3,16}$/.test(username)) { err.textContent = "Usernames are 3 to 16 letters, numbers or _"; return; }
+        if (password.length < 6) { err.textContent = "Passwords need at least 6 characters"; return; }
+        if (email && !/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(email)) { err.textContent = "That email doesn't look right"; return; }
+      }
+      const submit = form.querySelector("button[type=submit]");
+      submit.disabled = true; err.textContent = "";
+      const r = mode === "signup"
+        ? await api("/api/account/signup", { method: "POST", body: { username, password, avatar, email: email || undefined, playerId: account.id } })
+        : await api("/api/account/login", { method: "POST", body: { username, password } });
+      submit.disabled = false;
+      if (!r.ok) { err.textContent = r.data.error ?? "Something went wrong. Try again."; return; }
+      welcome(r, mode === "signup" ? `Welcome to MoveCam, ${r.data.username}!` : `Welcome back, ${r.data.username}!`);
     });
-    el.querySelector("#notNow").addEventListener("click", closeOverlay);
+    let codeSent = false;
+    forgot.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const who = forgot.who.value.trim();
+      if (!who) { ferr.textContent = "Enter your username or email"; return; }
+      const submit = forgot.querySelector("button[type=submit]");
+      submit.disabled = true; ferr.textContent = "";
+      if (!codeSent) {
+        const r = await api("/api/account/forgot", { method: "POST", body: { who } });
+        submit.disabled = false;
+        if (!r.ok) { ferr.textContent = r.data.error ?? "Couldn't send a code. Try again."; return; }
+        codeSent = true;
+        forgot.querySelector(".code-step").classList.remove("hidden");
+        el.querySelector(".lead").textContent = r.data.message;
+        submit.textContent = "Reset password";
+        forgot.code.focus();
+        return;
+      }
+      const r = await api("/api/account/reset", { method: "POST", body: { who, code: forgot.code.value, newPassword: forgot.next.value } });
+      submit.disabled = false;
+      if (!r.ok) { ferr.textContent = r.data.error ?? "Couldn't reset your password."; return; }
+      welcome(r, `Password changed. Welcome back, ${r.data.username}!`);
+    });
+    el.querySelector("#forgotBtn").addEventListener("click", () => setMode("forgot"));
+    el.querySelector("#backToSignIn").addEventListener("click", () => setMode("signin"));
+    el.querySelector("#notNow")?.addEventListener("click", closeOverlay);
     setMode(mode);
-    setTimeout(() => form.username.focus(), 50);
   }
-  el.addEventListener("click", (e) => { if (e.target === el) closeOverlay(); });
-  el.dataset.kind = "account";
+  if (!gate || account.signedIn) el.addEventListener("click", (e) => { if (e.target === el) closeOverlay(); });
+  el.dataset.kind = gate ? "gate" : "account";
   showOverlay(el);
+}
+
+/** Playing needs an account: shows the sign-up sheet until the player has one. */
+function requireSignIn() {
+  if (account.signedIn) return true;
+  openAccount(loadSetting("hadAccount", false) ? "signin" : "signup", { gate: true });
+  return false;
+}
+
+function afterSignIn() {
+  saveSetting("hadAccount", true);
+  if (!loadSetting("guideDone", false)) showGuide();
 }
 
 function openSettings() {
@@ -408,10 +492,11 @@ function openSettings() {
     <div class="row"><label>Sound effects</label>${sw(audio.settings.sound)}</div>
     <div class="row"><label>Show tracking skeleton</label>${sw(loadSetting("skeleton", true))}</div>
     <div class="row ${native ? "hidden" : ""}"><label>Share anonymous play stats<small>Game names, scores and play time. Never video.</small></label>${sw(loadSetting("shareUsage", true))}</div>
-    <div class="row"><label>${account.signedIn ? esc(account.username) : "Your MoveCam ID"}<small>${account.isPro ? (account.plan === "trial" ? "Pro trial" : "Pro") : "Free plan"}${account.signedIn ? "" : " · not signed in"}</small></label><span class="idbox" style="font-size:15px">${account.id}</span></div>
+    <div class="row"><label>Account<small>${account.isPro ? (account.plan === "trial" ? "Pro trial" : "Pro") : "Free plan"}</small></label><button class="btn profile" id="acctBtn">${avatarHTML(24)}<span>${esc(account.username ?? "Sign in")}</span></button></div>
     <div class="row"><label>How to move<small>A one-minute guide to the four moves</small></label><button class="btn" id="guideBtn">Show guide</button></div>
     <button class="btn accent big" style="align-self:center;margin-top:8px" id="doneBtn">Done</button></div></div>`);
   el.querySelector("#guideBtn").addEventListener("click", () => showGuide());
+  el.querySelector("#acctBtn").addEventListener("click", () => openAccount());
   const switches = el.querySelectorAll(".switch");
   const keys = ["music", "sound", "skeleton", "shareUsage"];
   switches.forEach((s, i) => s.addEventListener("click", () => {
@@ -585,6 +670,215 @@ function guideSnapshot(snap) {
   if (guide.step === 0 && p >= 1) advanceGuide(true);
 }
 
+// ---------------------------------------------------------------- multiplayer parties
+
+// Everyone in a party plays the same game at the same time on their own device;
+// scores stream to the party room and show up live on everyone's screen.
+const party = { ws: null, view: null, code: null, round: 0, sendTimer: null, retries: 0, leaving: false, scores: [] };
+const amHost = () => party.view && account.username && party.view.host?.toLowerCase() === account.username.toLowerCase();
+const partyBoard = $(`<div id="partyBoard" class="hidden"></div>`);
+root.append(partyBoard);
+
+function wsBase() {
+  if (native) return "wss://movecam.bhswebsite.org";
+  return location.origin.replace(/^http/, "ws");
+}
+
+async function createParty() {
+  const r = await api("/api/party/create", { method: "POST", auth: true });
+  if (!r.ok) { toast(r.data.error ?? "Couldn't make a party."); return; }
+  connectParty(r.data.code);
+}
+
+function connectParty(code) {
+  leaveParty(true);
+  party.code = code.toUpperCase();
+  party.leaving = false;
+  const ws = new WebSocket(`${wsBase()}/api/party/${party.code}?token=${encodeURIComponent(account.token)}`);
+  party.ws = ws;
+  ws.onopen = () => { party.retries = 0; };
+  ws.onmessage = (e) => {
+    let m;
+    try { m = JSON.parse(e.data); } catch { return; }
+    if (m.t === "error") { toast(m.message); party.leaving = true; return; }
+    if (m.t === "scores") { party.scores = m.players; renderPartyBoard(); return; }
+    if (m.t === "state") onPartyState(m);
+  };
+  ws.onclose = (e) => {
+    if (party.ws !== ws) return;
+    party.ws = null;
+    if (party.leaving || e.code === 4000 || e.code === 4001) {
+      if (e.code === 4001) toast("You joined this party from another device.");
+      resetParty();
+      return;
+    }
+    if (party.retries++ < 4) setTimeout(() => { if (party.code && !party.ws) connectParty(party.code); }, 1200 * party.retries);
+    else { toast("Lost connection to the party."); resetParty(); }
+  };
+}
+
+function resetParty() {
+  clearInterval(party.sendTimer);
+  Object.assign(party, { ws: null, view: null, code: null, round: 0, sendTimer: null, scores: [] });
+  partyBoard.classList.add("hidden");
+  if (state.overlay?.dataset.kind === "party") renderPartySheet();
+  renderMenu();
+}
+
+function leaveParty(silent = false) {
+  if (!party.ws && !party.code) return;
+  party.leaving = true;
+  try { party.ws?.send(JSON.stringify({ t: "leave" })); party.ws?.close(1000); } catch { /* already closed */ }
+  resetParty();
+  if (!silent) toast("You left the party.");
+}
+
+function partySend(msg) {
+  if (party.ws?.readyState === WebSocket.OPEN) party.ws.send(JSON.stringify(msg));
+}
+
+function onPartyState(view) {
+  const prev = party.view;
+  party.view = view;
+  party.scores = view.players;
+  renderMenu();
+  if (view.phase === "playing" && view.round !== party.round) {
+    party.round = view.round;
+    startPartyRound(view);
+  } else if (view.phase === "results" && prev?.phase !== "results") {
+    showPartyResults();
+  } else if (view.phase === "lobby" && prev && prev.phase !== "lobby" && state.screen === "game") {
+    backToMenu();
+    openParty();
+  } else if (state.overlay?.dataset.kind === "party") {
+    renderPartySheet();
+  } else if (state.overlay?.dataset.kind === "partyResults" && view.phase === "results") {
+    showPartyResults();
+  }
+  renderPartyBoard();
+}
+
+function openParty() {
+  const el = $(`<div class="scrim"><div class="panel partysheet"></div></div>`);
+  el.addEventListener("click", (e) => { if (e.target === el) closeOverlay(); });
+  el.dataset.kind = "party";
+  showOverlay(el);
+  renderPartySheet();
+}
+
+function playerChip(p) {
+  const host = party.view?.host === p.name;
+  return `<div class="pchip ${p.online === false ? "away" : ""}"><span class="avatar" style="width:34px;height:34px;font-size:16px;background:${AVATAR_COLORS[p.avatar % AVATAR_COLORS.length]}">${esc(p.name[0].toUpperCase())}</span>
+    <b>${esc(p.name)}</b>${host ? `<span class="tag">HOST</span>` : ""}${p.pro ? `<span class="tag pro">PRO</span>` : ""}</div>`;
+}
+
+function renderPartySheet() {
+  const panel = state.overlay?.dataset.kind === "party" ? state.overlay.querySelector(".panel") : null;
+  if (!panel) return;
+  const v = party.view;
+  if (!party.code) {
+    panel.innerHTML = `<h2>Play with friends</h2>
+      <p>Everyone plays the same game at the same time, each on their own Mac, iPad or computer. Scores show up live.</p>
+      <div class="choices"><button class="choice good" id="mkParty"><span class="sym">🎉</span><b>Create a party</b><span>You pick the game and start it</span></button></div>
+      <form class="join"><input name="code" maxlength="4" placeholder="CODE" autocapitalize="characters" autocomplete="off" spellcheck="false"><button class="btn big" type="submit">Join</button></form>
+      <p class="small">Up to 4 players. A Pro host can have up to 8.</p>
+      <button class="link" id="closeParty">Close</button>`;
+    panel.querySelector("#mkParty").addEventListener("click", createParty);
+    panel.querySelector("form.join").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const code = e.target.code.value.trim().toUpperCase();
+      if (!/^[A-Z]{4}$/.test(code)) { toast("Party codes are 4 letters."); return; }
+      connectParty(code);
+    });
+    panel.querySelector("#closeParty").addEventListener("click", closeOverlay);
+    setTimeout(() => panel.querySelector("input")?.focus(), 30);
+    return;
+  }
+  if (!v) { panel.innerHTML = `<h2>Joining ${esc(party.code)}…</h2><button class="link" id="cancelJoin">Cancel</button>`; panel.querySelector("#cancelJoin").addEventListener("click", () => leaveParty(true)); return; }
+  const host = amHost();
+  const hostPlayer = v.players.find((p) => p.name === v.host);
+  const games = GAMES.map((g) => {
+    const locked = g.pro && !hostPlayer?.pro;
+    return `<button class="gpick ${g.id === v.game ? "on" : ""} ${locked ? "locked" : ""}" data-id="${g.id}" ${!host || locked ? "disabled" : ""}>
+      <span class="thumb" style="background-image:url('${ASSETS}cards/${g.id}.jpg')"></span><span>${esc(g.title)}${locked ? " 🔒" : ""}</span></button>`;
+  }).join("");
+  panel.innerHTML = `<div class="eyebrow">Party code</div>
+    <div class="bigcode">${esc(v.code)}</div>
+    <p>Friends join from <b>Play with friends</b> with this code.</p>
+    <div class="players">${v.players.map(playerChip).join("")}<span class="count">${v.players.length}/${v.max}</span></div>
+    <div class="field"><label>${host ? "Pick a game" : `${esc(v.host ?? "The host")} picks the game`}</label><div class="gpicks">${games}</div></div>
+    <div class="actions">
+      <button class="btn" id="leaveParty">Leave party</button>
+      ${host ? `<button class="btn accent big" id="startParty" ${v.players.length < 1 ? "disabled" : ""}>✋ Start ${esc(GAMES.find((g) => g.id === v.game)?.title ?? "")}</button>`
+             : `<span class="waiting">Waiting for ${esc(v.host ?? "the host")} to start…</span>`}
+    </div>`;
+  panel.querySelectorAll(".gpick").forEach((b) => b.addEventListener("click", () => partySend({ t: "game", game: b.dataset.id })));
+  panel.querySelector("#leaveParty").addEventListener("click", () => { leaveParty(); renderPartySheet(); });
+  panel.querySelector("#startParty")?.addEventListener("click", () => partySend({ t: "start" }));
+}
+
+function startPartyRound(view) {
+  const info = GAMES.find((g) => g.id === view.game);
+  if (!info) return;
+  closeOverlay();
+  launch(info, { party: true });
+  // Everyone's countdown ends at the same moment.
+  beginCountdown(Math.max(0, view.startAt - Date.now()));
+  clearInterval(party.sendTimer);
+  party.sendTimer = setInterval(() => {
+    // Scores keep flowing while paused too, so the board stays honest for everyone else.
+    if (state.gameStarted && state.game && !state.game.finished) partySend({ t: "score", score: state.game.score ?? 0 });
+  }, 500);
+  renderPartyBoard();
+}
+
+function renderPartyBoard() {
+  const show = party.view && state.screen === "game" && party.view.phase !== "lobby";
+  partyBoard.classList.toggle("hidden", !show);
+  if (!show) return;
+  const list = [...(party.scores ?? [])].sort((a, b) => b.score - a.score);
+  partyBoard.innerHTML = list.map((p, i) => {
+    const me = p.name.toLowerCase() === account.username?.toLowerCase();
+    return `<div class="row ${me ? "me" : ""}"><span class="pos">${i + 1}</span><span class="name">${esc(p.name)}</span><span class="pts">${(p.score ?? 0).toLocaleString()}</span>${p.done ? `<span class="st">✓</span>` : ""}</div>`;
+  }).join("");
+}
+
+function partyFinished(result) {
+  clearInterval(party.sendTimer);
+  partySend({ t: "done", score: result.score, detail: result.detail });
+  if (party.view?.phase === "results") { showPartyResults(); return; }
+  const el = $(`<div class="scrim"><div class="panel">
+    <div class="eyebrow">Your score</div><div class="score">${result.score.toLocaleString()}</div><p>${esc(result.detail)}</p>
+    <h2 class="headline" style="font-size:22px">Waiting for the others to finish…</h2>
+    <button class="link" id="leaveMid">Leave party</button></div></div>`);
+  el.querySelector("#leaveMid").addEventListener("click", () => { leaveParty(); backToMenu(); });
+  el.dataset.kind = "partyWait";
+  showOverlay(el);
+}
+
+function showPartyResults() {
+  const v = party.view;
+  if (!v) return;
+  clearInterval(party.sendTimer);
+  if (state.screen === "game" && state.phase !== "over") { state.phase = "over"; }
+  const medal = ["🥇", "🥈", "🥉"];
+  const mine = v.results.findIndex((r) => r.name.toLowerCase() === account.username?.toLowerCase());
+  const el = $(`<div class="scrim"><div class="panel results">
+    <div class="eyebrow">${esc(GAMES.find((g) => g.id === v.game)?.title ?? "")} · Results</div>
+    <h2>${mine === 0 ? "You won! 🏆" : mine > 0 ? `You came ${mine + 1}${["st", "nd", "rd"][mine] ?? "th"}` : "Results"}</h2>
+    <div class="ranking">${v.results.map((r, i) => `<div class="rank ${i === mine ? "me" : ""}"><span class="m">${medal[i] ?? i + 1}</span>
+      <span class="avatar" style="width:30px;height:30px;font-size:14px;background:${AVATAR_COLORS[r.avatar % AVATAR_COLORS.length]}">${esc(r.name[0].toUpperCase())}</span>
+      <b>${esc(r.name)}</b><span class="d">${esc(r.detail ?? "")}</span><span class="pts">${r.score.toLocaleString()}</span></div>`).join("")}</div>
+    <div class="actions"><button class="btn" id="leaveRes">Leave party</button>
+      ${amHost() ? `<button class="btn accent big" id="nextRound">✋ Next game</button>` : `<span class="waiting">Waiting for ${esc(v.host ?? "the host")}…</span>`}</div>
+  </div></div>`);
+  el.querySelector("#leaveRes").addEventListener("click", () => { leaveParty(); backToMenu(); });
+  el.querySelector("#nextRound")?.addEventListener("click", () => partySend({ t: "lobby" }));
+  el.dataset.kind = "partyResults";
+  showOverlay(el);
+  audio.play(mine === 0 ? "combo" : "pause");
+}
+
 // ---------------------------------------------------------------- game flow
 
 const ctx = {
@@ -594,6 +888,7 @@ const ctx = {
 };
 
 function startSelected() {
+  if (!requireSignIn()) return;
   const info = GAMES[state.selected];
   if (info.pro && !account.isPro) {
     track("locked", info.id);
@@ -606,8 +901,9 @@ function startSelected() {
   launch(info);
 }
 
-function launch(info) {
+function launch(info, { party: inParty = false } = {}) {
   clearTimeout(state.countdownTimer);
+  state.inParty = inParty;
   disposeGame();
   hud.reset();
   state.info = info;
@@ -623,7 +919,7 @@ function launch(info) {
   hud.show(true);
   pauseBtn.classList.remove("hidden");
   audio.playMusic(info.id);
-  showWaiting();
+  if (!inParty) showWaiting();
 }
 
 function disposeGame() {
@@ -633,11 +929,18 @@ function disposeGame() {
   }
 }
 
-function beginCountdown() {
+function beginCountdown(delayMs = 0) {
   closeOverlay();
   clearTimeout(state.countdownTimer);
   let n = 3;
   state.phase = "countdown";
+  if (delayMs > 2400) {
+    // Party start: wait so the 3-2-1 finishes when the room's start time arrives.
+    countdownEl.innerHTML = `<span style="font-size:48px">Get ready…</span>`;
+    countdownEl.classList.remove("hidden");
+    state.countdownTimer = setTimeout(() => beginCountdown(2400), delayMs - 2400);
+    return;
+  }
   const step = () => {
     if (state.phase !== "countdown") return;
     if (n === 0) {
@@ -688,6 +991,10 @@ function backToMenu() {
   if (state.gameStarted && state.phase !== "over" && state.info) {
     track("quit", state.info.id, state.game?.score ?? 0, (performance.now() - state.startedAt) / 1000);
   }
+  if (state.inParty && party.view?.phase === "playing") partySend({ t: "done", score: state.game?.score ?? 0, detail: "Left early" });
+  state.inParty = false;
+  clearInterval(party.sendTimer);
+  partyBoard.classList.add("hidden");
   closeOverlay();
   countdownEl.classList.add("hidden");
   disposeGame();
@@ -721,15 +1028,26 @@ function gameFinished(result) {
   hub.resetGestures();
   audio.duck(true);
   if (best) setTimeout(() => audio.play("combo"), 1200);
+  if (state.inParty && party.view) { partyFinished(result); return; }
   showOver();
 }
 
 // ---------------------------------------------------------------- input
 
-const FORM_OVERLAYS = new Set(["settings", "account"]);
+const FORM_OVERLAYS = new Set(["settings", "account", "gate", "party"]);
 hub.onEvent((event) => {
+  if (state.overlay?.dataset.kind === "party" && party.view?.phase === "lobby") {
+    if (event === "confirm" && amHost()) partySend({ t: "start" });
+    else if (event === "back") closeOverlay();
+    return;
+  }
   if (FORM_OVERLAYS.has(state.overlay?.dataset.kind)) return;
   if (state.overlay?.dataset.kind === "guide") { guideEvent(event); return; }
+  if (state.overlay?.dataset.kind === "partyResults") {
+    if (event === "confirm" && amHost()) partySend({ t: "lobby" });
+    return;
+  }
+  if (state.overlay?.dataset.kind === "partyWait") return;
   if (state.screen === "menu") {
     if (state.overlay?.dataset.kind === "pro") { if (event === "confirm" || event === "back") closeOverlay(); return; }
     if (event === "confirm") startSelected();
@@ -740,7 +1058,7 @@ hub.onEvent((event) => {
   if (event === "confirm") {
     if (state.phase === "waiting") beginCountdown();
     else if (state.phase === "paused") resume();
-    else if (state.phase === "over") replay();
+    else if (state.phase === "over" && !state.inParty) replay();
   } else if (event === "back") {
     if (state.phase === "playing" || state.phase === "countdown") pause();
     else backToMenu();
@@ -751,7 +1069,10 @@ pauseBtn.addEventListener("click", () => pause());
 
 window.addEventListener("keydown", (e) => {
   const backKey = e.code === "Escape";
-  if (FORM_OVERLAYS.has(state.overlay?.dataset.kind)) { if (backKey) closeOverlay(); return; }
+  if (FORM_OVERLAYS.has(state.overlay?.dataset.kind)) {
+    if (backKey && state.overlay.dataset.kind !== "gate") closeOverlay();
+    return;
+  }
   if (state.overlay?.dataset.kind === "guide") {
     if (backKey) finishGuide();
     else if (e.code === "Space" || e.code === "Enter" || e.code === "ArrowRight") advanceGuide();
@@ -940,7 +1261,7 @@ function showStart() {
     audio.playMusic("menu");
     el.remove();
     startCamera(loadSetting("camera", undefined));
-    if (!loadSetting("guideDone", false)) showGuide();
+    if (requireSignIn()) afterSignIn();
   });
   root.append(el);
 }
@@ -949,7 +1270,7 @@ function showStart() {
 installNativeBridge(hub);
 window.MoveCamNative.setAccount = ({ userId, plan, expiresAt }) => {
   if (userId && account.signedIn && userId !== account.id) {
-    postToNative({ type: "account", playerId: account.id }); // native catches up, then calls again
+    postToNative({ type: "account", playerId: account.id, username: account.username }); // native catches up, then calls again
     return;
   }
   if (userId) account.id = userId;
@@ -995,8 +1316,8 @@ if (params.has("preview")) {
   audio.unlock();
   audio.playMusic("menu");
   postToNative({ type: "ready" });
-  if (!loadSetting("guideDone", false)) showGuide();
-  if (account.signedIn) postToNative({ type: "account", playerId: account.id });
+  if (requireSignIn()) afterSignIn();
+  if (account.signedIn) postToNative({ type: "account", playerId: account.id, username: account.username });
   refreshAccount();
 } else {
   refreshAccount();
@@ -1004,4 +1325,4 @@ if (params.has("preview")) {
   setInterval(() => checkin(false), 20 * 60 * 1000);
   showStart();
 }
-window.__movecam = { state, hub, audio, GAMES };
+window.__movecam = { state, hub, audio, GAMES, party };

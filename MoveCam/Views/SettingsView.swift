@@ -55,14 +55,10 @@ private struct AccountSettings: View {
 
     var body: some View {
         Form {
-            LabeledContent("Your MoveCam ID") {
-                HStack {
-                    Text(entitlements.userID).font(.system(.body, design: .monospaced)).textSelection(.enabled)
-                    Button("Copy") {
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(entitlements.userID, forType: .string)
-                    }
-                }
+            LabeledContent("Account") {
+                Text(entitlements.username ?? "Not signed in — sign in from the main window")
+                    .foregroundStyle(entitlements.username == nil ? .secondary : .primary)
+                    .textSelection(.enabled)
             }
             LabeledContent("Plan") {
                 switch entitlements.plan {
@@ -84,10 +80,10 @@ private struct AccountSettings: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }
-            Text("Share your ID with a moderator to get early access to Pro games.")
+            Text("Send your username to a moderator to get early access to Pro games.")
                 .font(.caption).foregroundStyle(.secondary)
             Toggle("Share anonymous play stats", isOn: $shareUsage)
-            Text("Which games you play, scores and play time, linked only to your MoveCam ID. Never video or anything personal.")
+            Text("Which games you play, scores and play time, linked to your account. Never video.")
                 .font(.caption).foregroundStyle(.secondary)
         }
         .formStyle(.grouped)
