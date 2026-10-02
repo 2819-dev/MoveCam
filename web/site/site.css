@@ -1,0 +1,54 @@
+:root { --bg: #0f1013; --surface: #1b1c21; --raised: #2a2c32; --hair: rgba(255,255,255,.09); --secondary: #a6a6ad; --accent: #ff6629; --good: #30c75a; }
+* { box-sizing: border-box; }
+html { background: var(--bg); color: #fff; font: 17px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+body { margin: 0; }
+a { color: inherit; }
+.wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+nav { display: flex; align-items: center; gap: 12px; padding: 20px 0; }
+nav .logo { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 20px; text-decoration: none; }
+nav .logo img { width: 32px; height: 32px; border-radius: 8px; }
+nav .links { margin-left: auto; display: flex; gap: 22px; font-size: 15px; color: var(--secondary); }
+nav .links a { text-decoration: none; }
+nav .links a:hover { color: #fff; }
+.btn { display: inline-flex; align-items: center; gap: 10px; height: 52px; padding: 0 24px; border-radius: 12px; background: var(--raised); font-weight: 650; text-decoration: none; font-size: 16px; }
+.btn.primary { background: var(--accent); }
+.btn small { font-weight: 500; opacity: .75; font-size: 13px; }
+.hero { padding: 56px 0 40px; display: grid; grid-template-columns: 1.05fr 1fr; gap: 48px; align-items: center; }
+.hero h1 { font-size: 58px; line-height: 1.04; margin: 0 0 18px; letter-spacing: -1.5px; }
+.hero p { color: var(--secondary); font-size: 19px; margin: 0 0 28px; max-width: 520px; }
+.cta { display: flex; gap: 12px; flex-wrap: wrap; }
+.shots { position: relative; aspect-ratio: 4/3.3; }
+.shots img { position: absolute; width: 74%; border-radius: 14px; box-shadow: 0 20px 50px rgba(0,0,0,.55); border: 1px solid var(--hair); }
+.shots img:nth-child(1) { right: 0; top: 0; }
+.shots img:nth-child(2) { left: 0; top: 30%; }
+.shots img:nth-child(3) { right: 6%; bottom: 0; width: 62%; }
+section { padding: 56px 0; border-top: 1px solid var(--hair); }
+section h2 { font-size: 36px; margin: 0 0 8px; letter-spacing: -.6px; }
+section > .wrap > p.lead { color: var(--secondary); margin: 0 0 32px; font-size: 18px; }
+.games { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }
+.game { background: var(--surface); border-radius: 14px; overflow: hidden; border: 1px solid var(--hair); }
+.game img { width: 100%; aspect-ratio: 16/9; object-fit: cover; display: block; }
+.game div { padding: 12px 14px 16px; }
+.game b { display: block; }
+.game span { color: var(--secondary); font-size: 14px; }
+.tag { font-size: 10px; font-weight: 800; letter-spacing: .6px; padding: 2px 6px; border-radius: 4px; background: #fdc22e; color: #000; margin-left: 6px; vertical-align: 2px; }
+.steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.step { background: var(--surface); border-radius: 14px; padding: 22px; border: 1px solid var(--hair); }
+.step .n { width: 32px; height: 32px; border-radius: 16px; background: var(--accent); display: grid; place-items: center; font-weight: 700; margin-bottom: 12px; }
+.step h3 { margin: 0 0 6px; font-size: 18px; }
+.step p { margin: 0; color: var(--secondary); font-size: 15px; }
+.platforms { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.platform { background: var(--surface); border-radius: 16px; padding: 28px; border: 1px solid var(--hair); display: flex; flex-direction: column; gap: 12px; }
+.platform h3 { margin: 0; font-size: 24px; }
+.platform p { margin: 0; color: var(--secondary); }
+.platform ol { margin: 0; padding-left: 20px; color: #ddd; }
+.platform li { margin: 6px 0; }
+.platform .btn { align-self: flex-start; margin-top: 8px; }
+kbd { background: var(--raised); border-radius: 5px; padding: 1px 6px; font: 600 14px -apple-system, sans-serif; }
+footer { padding: 36px 0 48px; color: var(--secondary); font-size: 14px; border-top: 1px solid var(--hair); }
+@media (max-width: 860px) {
+  .hero { grid-template-columns: 1fr; padding-top: 24px; }
+  .hero h1 { font-size: 42px; }
+  .steps, .platforms { grid-template-columns: 1fr; }
+  nav .links { display: none; }
+}

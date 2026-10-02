@@ -1,0 +1,16 @@
+{
+  "name": "MoveCam",
+  "short_name": "MoveCam",
+  "description": "Motion games played with your body. Your camera is the controller.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#111215",
+  "theme_color": "#111215",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
