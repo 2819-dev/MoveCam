@@ -76,15 +76,15 @@ button { font: inherit; color: inherit; border: 0; cursor: pointer; }
 #live .offline { position: absolute; inset: 0; display: grid; place-items: center; color: #ccc; font-size: 12px; text-align: center; }
 
 /* ---------- HUD ---------- */
-#hud { position: fixed; top: calc(20px + var(--safe-top)); left: calc(20px + var(--safe-left)); z-index: 20; pointer-events: none;
+#hud, .hud-duo { position: fixed; top: calc(20px + var(--safe-top)); left: calc(20px + var(--safe-left)); z-index: 20; pointer-events: none;
   display: flex; background: rgba(0,0,0,.72); border-radius: 12px; padding: 10px 0; }
-#hud .stat { padding: 0 18px; border-left: 1px solid rgba(255,255,255,.12); }
-#hud .stat:first-child { border-left: 0; }
-#hud .label { font-size: 10px; font-weight: 700; letter-spacing: 1px; color: var(--secondary); }
-#hud .value { font-size: 30px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.15; }
-#hud .hearts { font-size: 17px; height: 36px; display: flex; align-items: center; gap: 3px; color: var(--bad); }
-#hud .hearts .off { color: rgba(255,255,255,.18); }
-#banner { position: fixed; top: calc(130px + var(--safe-top)); left: 50%; transform: translateX(-50%); z-index: 21; pointer-events: none;
+#hud .stat, .hud-duo .stat { padding: 0 18px; border-left: 1px solid rgba(255,255,255,.12); }
+#hud .stat:first-child, .hud-duo .stat:first-child { border-left: 0; }
+#hud .label, .hud-duo .label { font-size: 10px; font-weight: 700; letter-spacing: 1px; color: var(--secondary); }
+#hud .value, .hud-duo .value { font-size: 30px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.15; }
+#hud .hearts, .hud-duo .hearts { font-size: 17px; height: 36px; display: flex; align-items: center; gap: 3px; color: var(--bad); }
+#hud .hearts .off, .hud-duo .hearts .off { color: rgba(255,255,255,.18); }
+#banner, .banner-duo { position: fixed; top: calc(130px + var(--safe-top)); left: 50%; transform: translateX(-50%); z-index: 21; pointer-events: none;
   font-size: 30px; font-weight: 800; padding: 10px 22px; border-radius: 10px; background: rgba(0,0,0,.75); transition: opacity .18s; white-space: nowrap; }
 #pauseBtn { position: fixed; z-index: 22; top: calc(20px + var(--safe-top)); left: 50%; transform: translateX(-50%); width: 44px; height: 44px;
   border-radius: 22px; background: rgba(0,0,0,.55); display: grid; place-items: center; font-size: 16px; }
@@ -235,3 +235,27 @@ form.join input:focus { border-color: var(--accent); }
 .rank .m { width: 28px; font-size: 20px; text-align: center; }
 .rank .d { flex: 1; color: var(--tertiary); font-size: 13px; }
 .rank .pts { font-weight: 800; font-variant-numeric: tabular-nums; }
+
+/* ---------- two players, one camera ---------- */
+.hud-duo.p2 { left: calc(50% + 20px); }
+.hud-duo .who .value { color: var(--p1); }
+.hud-duo.p2 .who .value { color: var(--p2); }
+.banner-duo.p1 { left: 25%; }
+.banner-duo.p2 { left: 75%; }
+:root { --p1: #2f8cff; --p2: #ff6629; }
+#duoDivider { position: fixed; top: 0; bottom: 0; left: 50%; width: 4px; margin-left: -2px; background: rgba(255,255,255,.85); z-index: 19; pointer-events: none; }
+.duo-done { position: fixed; top: 50%; transform: translate(-50%, -50%); z-index: 30; background: rgba(15,15,18,.88); border-radius: 16px;
+  padding: 22px 30px; text-align: center; pointer-events: none; min-width: 240px; }
+.duo-done.p1 { left: 25%; } .duo-done.p2 { left: 75%; }
+.duo-done .score { font-size: 54px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.modes { display: inline-flex; background: var(--surface); border-radius: 10px; padding: 3px; margin: 14px 10px 0 0; vertical-align: top; }
+.modes button { height: 34px; padding: 0 14px; border-radius: 8px; background: none; font-weight: 600; color: var(--secondary); }
+.modes button.on { background: var(--raised); color: var(--text); }
+.duo-pills { display: flex; gap: 10px; }
+.duo-pills .pill b { margin-right: 6px; }
+.duo-score { display: flex; gap: 14px; width: 100%; }
+.duo-score > div { flex: 1; background: var(--raised); border-radius: 12px; padding: 14px; }
+.duo-score .score { font-size: 46px; }
+.duo-score .p1 b { color: var(--p1); } .duo-score .p2 b { color: var(--p2); }
+.duo-score .win { outline: 3px solid var(--pro); }
+body.duo #live { top: auto; bottom: calc(16px + var(--safe-bottom)); right: auto; left: 50%; transform: translateX(-50%); width: 240px; }

@@ -11,6 +11,8 @@ final class WebBridge: NSObject, ObservableObject, WKScriptMessageHandler, WKNav
     /// "menu" | "game"; "waiting" | "countdown" | "playing" | "paused" | "over"
     @Published private(set) var screen = "menu"
     @Published private(set) var phase = "waiting"
+    /// Two players on one camera: the live view moves out of the way of Player 2's scoreboard.
+    @Published private(set) var isDuo = false
     var onConsoleError: ((String) -> Void)?
 
     private let hub: MotionHub
@@ -133,6 +135,7 @@ final class WebBridge: NSObject, ObservableObject, WKScriptMessageHandler, WKNav
         case "state":
             screen = body["screen"] as? String ?? screen
             phase = body["phase"] as? String ?? phase
+            isDuo = body["duo"] as? Bool ?? false
             // Hand tracking (thumbs up) costs CPU; only run it outside gameplay.
             hub.detectHands = !(screen == "game" && phase == "playing")
         case "event":

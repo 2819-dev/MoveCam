@@ -72,10 +72,13 @@ final class MotionHub: ObservableObject {
         lock.lock(); pendingReset = true; lock.unlock()
     }
 
-    static func frameJSON(_ pose: BodyPose?, thumbsUp: Bool, time: TimeInterval) -> String {
-        guard let pose else { return "{\"t\":\(time),\"thumbsUp\":\(thumbsUp),\"joints\":null}" }
-        let joints = pose.joints.map { "\"\($0.key)\":[\(Float($0.value.x)),\(Float($0.value.y))]" }.joined(separator: ",")
-        return "{\"t\":\(time),\"aspect\":\(Float(pose.aspect)),\"thumbsUp\":\(thumbsUp),\"joints\":{\(joints)}}"
+    static func frameJSON(_ pose: BodyPose?, thumbsUp: Bool, time: TimeInterval, people: [BodyPose] = []) -> String {
+        func joints(_ p: BodyPose) -> String {
+            "{" + p.joints.map { "\"\($0.key)\":[\(Float($0.value.x)),\(Float($0.value.y))]" }.joined(separator: ",") + "}"
+        }
+        let crowd = "[" + people.map(joints).joined(separator: ",") + "]"
+        guard let pose else { return "{\"t\":\(time),\"thumbsUp\":\(thumbsUp),\"joints\":null,\"people\":[]}" }
+        return "{\"t\":\(time),\"aspect\":\(Float(pose.aspect)),\"thumbsUp\":\(thumbsUp),\"joints\":\(joints(pose)),\"people\":\(crowd)}"
     }
 
     /// Treat the player's current spot as the center (lanes, steering, menu steps).
@@ -109,7 +112,7 @@ final class MotionHub: ObservableObject {
             newSpeed = TrackingSpeed(fps: Double(speedFrames) / (now - speedSince), trackingMs: speedWork / Double(speedFrames) * 1000)
             speedFrames = 0; speedWork = 0; speedSince = now
         }
-        if let onFrame { onFrame(Self.frameJSON(result.pose, thumbsUp: lastThumbsUp, time: now)) }
+        if let onFrame { onFrame(Self.frameJSON(result.pose, thumbsUp: lastThumbsUp, time: now, people: result.people)) }
         var (snap, events) = interpreter.process(pose: result.pose, thumbsUp: lastThumbsUp && result.pose != nil, time: now)
 
         lock.lock()

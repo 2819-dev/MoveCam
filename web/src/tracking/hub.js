@@ -17,6 +17,9 @@ export class MotionHub {
 
   onEvent(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); }
   onSnapshot(fn) { this.snapshotListeners.add(fn); return () => this.snapshotListeners.delete(fn); }
+  /** Everyone in the frame (up to two), for two-player mode. */
+  onPeople(fn) { (this.peopleListeners ??= new Set()).add(fn); }
+  processPeople(people, t) { for (const fn of this.peopleListeners ?? []) fn(people, t); }
 
   calibrate() { this.interpreter.requestCalibration(); }
   resetGestures() { this.interpreter.resetGestures(); }

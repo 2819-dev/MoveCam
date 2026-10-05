@@ -1,12 +1,19 @@
 // The in-game scoreboard and banner messages.
 export class Hud {
-  constructor(root) {
+  /** player: 1 or 2 for the split-screen HUDs of two-player mode. */
+  constructor(root, { player = null } = {}) {
     this.root = root;
+    this.player = player;
     this.state = { score: 0, lives: null, maxLives: 3, time: null, stat: null };
     this.el = document.createElement("div");
-    this.el.id = "hud";
     this.banner = document.createElement("div");
-    this.banner.id = "banner";
+    if (player) {
+      this.el.className = `hud-duo p${player}`;
+      this.banner.className = `banner-duo p${player}`;
+    } else {
+      this.el.id = "hud";
+      this.banner.id = "banner";
+    }
     this.banner.style.opacity = "0";
     root.append(this.el, this.banner);
     this.token = 0;
@@ -38,7 +45,9 @@ export class Hud {
 
   render() {
     const s = this.state;
-    const parts = [`<div class="stat"><div class="label">SCORE</div><div class="value">${s.score.toLocaleString()}</div></div>`];
+    const parts = [];
+    if (this.player) parts.push(`<div class="stat who"><div class="label">PLAYER</div><div class="value">${this.player}</div></div>`);
+    parts.push(`<div class="stat"><div class="label">SCORE</div><div class="value">${s.score.toLocaleString()}</div></div>`);
     if (s.lives !== null) {
       let hearts = "";
       for (let i = 0; i < s.maxLives; i++) hearts += `<span class="${i < s.lives ? "" : "off"}">♥</span>`;

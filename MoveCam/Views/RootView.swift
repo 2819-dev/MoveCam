@@ -11,10 +11,13 @@ struct RootView: View {
             GameWebView(bridge: bridge)
                 .ignoresSafeArea()
             if PreviewRenderer.outputDirectory == nil {
-                LiveView(hub: hub, camera: camera, width: 300)
-                    .padding(.top, 18)
-                    .padding(.trailing, 18)
+                // Top right normally; bottom center in two-player split screen.
+                LiveView(hub: hub, camera: camera, width: bridge.isDuo ? 240 : 300)
+                    .padding(bridge.isDuo ? [.bottom] : [.top, .trailing], 18)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity,
+                           alignment: bridge.isDuo ? .bottom : .topTrailing)
                     .allowsHitTesting(false)
+                    .animation(.easeInOut(duration: 0.3), value: bridge.isDuo)
             }
             if camera.authorization == .denied || camera.authorization == .restricted {
                 CameraPermissionCard()

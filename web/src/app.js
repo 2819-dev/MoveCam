@@ -4,6 +4,7 @@ import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { MotionHub } from "./tracking/hub.js";
 import { BrowserCamera, installNativeBridge, isNativeHost, postToNative } from "./tracking/camera.js";
+import { DuoTracker } from "./tracking/duo.js";
 import { BONES, STATUS } from "./tracking/pose.js";
 import { Audio, loadSetting, saveSetting } from "./audio.js";
 import { Hud } from "./hud.js";
@@ -165,6 +166,13 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.0;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 const hud = new Hud(root);
+// Two players, one camera: split screen, one game and HUD per player.
+const duo = new DuoTracker();
+hub.onPeople((people, t) => duo.process(people, t));
+const duoHuds = [new Hud(root, { player: 1 }), new Hud(root, { player: 2 })];
+duoHuds.forEach((h) => h.show(false));
+const duoDivider = $(`<div id="duoDivider" class="hidden"></div>`);
+root.append(duoDivider);
 hud.show(false);
 
 const state = {
@@ -192,7 +200,8 @@ const menu = $(`<div id="menu">
     </div>
     <h1>Games</h1>
     <div class="sub">Swing an arm out to the side to choose. Raise a hand to play. Or just tap.</div>
-    <button class="btn party-btn" id="partyBtn">👥 Play with friends</button>
+    <div class="modes" id="modes"><button data-duo="0">👤 1 player</button><button data-duo="1">👥 2 players, 1 camera</button></div>
+    <button class="btn party-btn" id="partyBtn">🌐 Play online with friends</button>
   </header>
   <div class="carousel" id="carousel"></div>
   <div class="hints">
@@ -260,7 +269,12 @@ function renderMenu() {
   badge.style.color = account.isPro ? "#000" : "";
   menu.querySelector("#musicBtn").textContent = audio.settings.music ? "♫" : "♫̸";
   menu.querySelector("#profileBtn").innerHTML = avatarHTML(24) + `<span>${account.signedIn ? esc(account.username) : "Sign in"}</span>`;
-  menu.querySelector("#partyBtn").innerHTML = party.view ? `👥 Party ${party.view.code} · ${party.view.players.length} in` : "👥 Play with friends";
+  menu.querySelector("#partyBtn").innerHTML = party.view ? `🌐 Party ${party.view.code} · ${party.view.players.length} in` : "🌐 Play online with friends";
+  const duoMode = loadSetting("duoMode", false);
+  menu.querySelectorAll("#modes button").forEach((b) => b.classList.toggle("on", (b.dataset.duo === "1") === duoMode));
+  menu.querySelector(".sub").textContent = duoMode
+    ? "Two players side by side: Player 1 on the left, Player 2 on the right. Swing an arm to choose, raise a hand to play."
+    : "Swing an arm out to the side to choose. Raise a hand to play. Or just tap.";
 }
 
 function moveSelection(d) {
@@ -274,6 +288,13 @@ function moveSelection(d) {
 menu.querySelector("#musicBtn").addEventListener("click", () => { audio.unlock(); audio.set("music", !audio.settings.music); renderMenu(); });
 menu.querySelector("#settingsBtn").addEventListener("click", () => openSettings());
 menu.querySelector("#profileBtn").addEventListener("click", () => { audio.unlock(); openAccount(); });
+menu.querySelectorAll("#modes button").forEach((b) => b.addEventListener("click", () => {
+  audio.unlock();
+  saveSetting("duoMode", b.dataset.duo === "1");
+  audio.play("select");
+  renderMenu();
+  if (b.dataset.duo === "1") toast("Two players: stand side by side, both fully in view.");
+}));
 menu.querySelector("#partyBtn").addEventListener("click", () => { audio.unlock(); if (requireSignIn()) openParty(); });
 menu.querySelector("#fullBtn").addEventListener("click", () => {
   if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen?.();
@@ -518,9 +539,11 @@ function showWaiting() {
   const el = $(`<div class="scrim"><div class="panel">
     <div class="eyebrow">${esc(state.info.title)}</div>
     <h2 class="headline">Get in position</h2>
-    <div class="pill"><span class="msg">Can't see anyone</span></div>
+    <div class="pill ${state.duo ? "hidden" : ""}"><span class="msg">Can't see anyone</span></div>
     <ul class="moves">${state.info.moves.map((m) => `<li>${esc(m)}</li>`).join("")}</ul>
-    <p>Stand back so the camera sees you from your head to below your hips. The frame turns green when you're in the right spot.</p>
+    ${state.duo ? `<div class="duo-pills"><span class="pill p1"><b>Player 1 · left</b><span class="msg">Can't see anyone</span></span><span class="pill p2"><b>Player 2 · right</b><span class="msg">Can't see anyone</span></span></div>
+    <p>Stand side by side with some space between you, both fully in view from head to below your hips.</p>`
+    : `<p>Stand back so the camera sees you from your head to below your hips. The frame turns green when you're in the right spot.</p>`}
     <div class="choices"></div></div></div>`);
   const choices = el.querySelector(".choices");
   choices.append(
@@ -899,7 +922,7 @@ function startSelected() {
   }
   saveSetting("lastGame", info.id);
   audio.play("confirm");
-  launch(info);
+  launch(info, { duo: loadSetting("duoMode", false) && !party.view });
 }
 
 // Soft studio reflections for every game: metal, glossy floors and skin pick up
@@ -914,16 +937,39 @@ function environment() {
   return envMap;
 }
 
-function launch(info, { party: inParty = false } = {}) {
+/** The per-player game context for split screen. */
+function duoCtx(i) {
+  return {
+    ...ctx, hub: duo.hubs[i], hud: duoHuds[i],
+    aspect: () => window.innerWidth / 2 / Math.max(window.innerHeight, 1),
+    onFinished: (result) => duoFinished(i, result),
+  };
+}
+
+function launch(info, { party: inParty = false, duo: twoPlayers = false } = {}) {
   clearTimeout(state.countdownTimer);
   state.inParty = inParty;
+  state.duoMode = twoPlayers;
   disposeGame();
   hud.reset();
   state.info = info;
-  state.game = info.make(ctx);
-  if (!state.game.scene.environment) {
-    state.game.scene.environment = environment();
-    state.game.scene.environmentIntensity = state.game.environmentIntensity ?? 0.35;
+  const withEnv = (g) => {
+    if (!g.scene.environment) {
+      g.scene.environment = environment();
+      g.scene.environmentIntensity = g.environmentIntensity ?? 0.35;
+    }
+    return g;
+  };
+  if (twoPlayers) {
+    duoHuds.forEach((h) => { h.reset(); h.show(true); });
+    state.duo = { games: [0, 1].map((i) => withEnv(info.make(duoCtx(i)))), results: [null, null], done: [] };
+    state.game = state.duo.games[0];
+    state.duo.games.forEach((g) => g.resize(ctx.aspect() / 2));
+    duo.start();
+    duoDivider.classList.remove("hidden");
+  } else {
+    state.duo = null;
+    state.game = withEnv(info.make(ctx));
   }
   state.gameStarted = false;
   state.goodSince = null;
@@ -933,17 +979,26 @@ function launch(info, { party: inParty = false } = {}) {
   hub.handsUpHold = info.pauseHold;
   hub.resetGestures();
   menu.classList.add("hidden");
-  hud.show(true);
+  hud.show(!twoPlayers);
   pauseBtn.classList.remove("hidden");
   audio.playMusic(info.id);
   if (!inParty) showWaiting();
 }
 
 function disposeGame() {
+  if (state.duo) {
+    state.duo.games.forEach((g) => g.dispose());
+    state.duo.done.forEach((el) => el.remove());
+    state.duo = null;
+    state.game = null;
+  }
   if (state.game) {
     state.game.dispose();
     state.game = null;
   }
+  duo.stop();
+  duoHuds.forEach((h) => h.show(false));
+  duoDivider.classList.add("hidden");
 }
 
 function beginCountdown(delayMs = 0) {
@@ -967,11 +1022,13 @@ function beginCountdown(delayMs = 0) {
       state.phase = "playing";
       state.missingSince = null;
       hub.resetGestures();
+      if (state.duo) duo.hubs.forEach((h) => { h.calibrate(); h.resetGestures(); });
       if (!state.gameStarted) {
         state.gameStarted = true;
         state.startedAt = performance.now();
         track("start", state.info.id);
-        state.game.start();
+        if (state.duo) state.duo.games.forEach((g) => g.start());
+        else state.game.start();
       }
       return;
     }
@@ -986,6 +1043,7 @@ function beginCountdown(delayMs = 0) {
 
 function pause(reason) {
   if (state.screen !== "game" || !(state.phase === "playing" || state.phase === "countdown")) return;
+  if (state.overlay?.dataset.kind === "over") return; // never cover the results
   clearTimeout(state.countdownTimer);
   countdownEl.classList.add("hidden");
   state.phase = state.gameStarted ? "paused" : "waiting";
@@ -1031,7 +1089,50 @@ function backToMenu() {
 function replay() {
   if (!state.info) return;
   audio.play("confirm");
-  launch(state.info);
+  launch(state.info, { duo: state.duoMode });
+}
+
+// ---------------------------------------------------------------- two players, one camera
+
+function duoFinished(i, result) {
+  const d = state.duo;
+  if (!d || state.screen !== "game" || d.results[i]) return;
+  d.results[i] = result;
+  if (d.results[0] && d.results[1]) { showDuoResults(); return; }
+  const el = $(`<div class="duo-done p${i + 1}"><div class="eyebrow">Player ${i + 1} finished</div>
+    <div class="score">${result.score.toLocaleString()}</div><p>${esc(result.detail)}</p>
+    <p style="color:var(--secondary)">Go, Player ${2 - i}!</p></div>`);
+  root.append(el);
+  d.done.push(el);
+  audio.play("whistle");
+}
+
+function showDuoResults() {
+  const d = state.duo;
+  clearTimeout(state.countdownTimer);
+  countdownEl.classList.add("hidden");
+  d.done.forEach((el) => el.remove());
+  d.done = [];
+  const [a, b] = d.results;
+  const winner = a.score === b.score ? 0 : a.score > b.score ? 1 : 2;
+  track("finish", state.info.id, Math.max(a.score, b.score), (performance.now() - state.startedAt) / 1000);
+  state.phase = "over";
+  hub.resetGestures();
+  audio.duck(true);
+  setTimeout(() => audio.play(winner ? "combo" : "cheer"), 600);
+  const card = (r, n) => `<div class="p${n} ${winner === n ? "win" : ""}"><b>Player ${n}${winner === n ? " 🏆" : ""}</b>
+    <div class="score">${r.score.toLocaleString()}</div><p>${esc(r.detail)}</p></div>`;
+  const el = $(`<div class="scrim"><div class="panel">
+    <div class="eyebrow">${esc(state.info.title)} · 2 players</div>
+    <h2>${winner ? `Player ${winner} wins!` : "It's a tie!"}</h2>
+    <div class="duo-score">${card(a, 1)}${card(b, 2)}</div>
+    <div class="choices"></div></div></div>`);
+  el.querySelector(".choices").append(
+    choice("✋", "Rematch", "Raise a hand · Space", "good", () => replay()),
+    choice("🙌", "Main menu", "Both hands up · Esc", "", () => backToMenu()),
+  );
+  el.dataset.kind = "over";
+  showOverlay(el);
 }
 
 function gameFinished(result) {
@@ -1140,6 +1241,24 @@ hub.onSnapshot((snap) => {
   const w = liveCanvas.width = liveCanvas.clientWidth * devicePixelRatio;
   const h = liveCanvas.height = liveCanvas.clientHeight * devicePixelRatio;
   liveCtx.clearRect(0, 0, w, h);
+  if (state.duo && loadSetting("skeleton", true)) {
+    duo.hubs.forEach((player, i) => {
+      const p = player.snapshot.pose;
+      if (!p) return;
+      const P = (q) => [q.x * w, (1 - q.y) * h];
+      liveCtx.strokeStyle = i ? "#ff6629" : "#2f8cff";
+      liveCtx.lineWidth = 3 * devicePixelRatio;
+      liveCtx.lineCap = "round";
+      liveCtx.beginPath();
+      for (const [a, b] of BONES) {
+        const pa = p.joints[a], pb = p.joints[b];
+        if (!pa || !pb) continue;
+        liveCtx.moveTo(...P(pa)); liveCtx.lineTo(...P(pb));
+      }
+      liveCtx.stroke();
+    });
+    return;
+  }
   const pose = snap.pose;
   if (pose && loadSetting("skeleton", true)) {
     const P = (p) => [p.x * w, (1 - p.y) * h];
@@ -1171,10 +1290,12 @@ hub.onSnapshot((snap) => {
 // Status-driven flow: auto-start when in position, auto-pause when the player leaves.
 let reportedState = "";
 setInterval(() => {
-  const key = state.screen + ":" + state.phase;
+  const twoUp = !!state.duo && state.screen === "game";
+  document.body.classList.toggle("duo", twoUp);
+  const key = state.screen + ":" + state.phase + ":" + twoUp;
   if (native && key !== reportedState) {
     reportedState = key;
-    postToNative({ type: "state", screen: state.screen, phase: state.phase });
+    postToNative({ type: "state", screen: state.screen, phase: state.phase, duo: twoUp });
   }
   const snap = hub.latest;
   if (state.screen === "menu") {
@@ -1185,7 +1306,9 @@ setInterval(() => {
     return;
   }
   if (state.phase === "waiting" && state.overlay?.dataset.kind === "waiting") {
-    if (snap.status.good) {
+    // Two players: both have to be in position.
+    const ready = state.duo ? duo.hubs.every((h) => h.snapshot.status.good) : snap.status.good;
+    if (ready) {
       state.goodSince ??= performance.now();
       if (performance.now() - state.goodSince > 1200) beginCountdown();
     } else state.goodSince = null;
@@ -1200,11 +1323,20 @@ setInterval(() => {
   holdRing.querySelector(".arc").setAttribute("stroke-dashoffset", String(176 * (1 - p)));
 }, 100);
 
+duo.hubs.forEach((h, i) => h.onSnapshot((snap) => {
+  if (state.overlay?.dataset.kind !== "waiting" || !state.duo) return;
+  const pill = state.overlay.querySelector(`.duo-pills .p${i + 1}`);
+  if (!pill) return;
+  pill.classList.toggle("good", snap.status.good);
+  pill.querySelector(".msg").textContent = snap.status.message;
+}));
+
 // ---------------------------------------------------------------- render loop
 
 function resize() {
   renderer.setSize(window.innerWidth, window.innerHeight, false);
-  state.game?.resize(ctx.aspect());
+  if (state.duo) state.duo.games.forEach((g) => g.resize(ctx.aspect() / 2));
+  else state.game?.resize(ctx.aspect());
 }
 window.addEventListener("resize", resize);
 resize();
@@ -1217,13 +1349,32 @@ renderer.setAnimationLoop(() => {
   last = now;
   const game = state.game;
   if (state.screen === "game" && game) {
-    if (state.phase === "playing" && !game.finished) {
-      game.elapsed += dt;
-      game.update(dt, hub.latest);
+    if (state.duo) {
+      // Split screen: Player 1 left, Player 2 right, each with their own input.
+      const w = window.innerWidth / 2, h = window.innerHeight;
+      renderer.setScissorTest(true);
+      state.duo.games.forEach((g, i) => {
+        if (state.phase === "playing" && !g.finished) {
+          g.elapsed += dt;
+          g.update(dt, duo.hubs[i].latest);
+        } else {
+          g.idle(dt);
+        }
+        renderer.setViewport(i * w, 0, w, h);
+        renderer.setScissor(i * w, 0, w, h);
+        renderer.render(g.scene, g.camera);
+      });
+      renderer.setScissorTest(false);
+      renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
     } else {
-      game.idle(dt);
+      if (state.phase === "playing" && !game.finished) {
+        game.elapsed += dt;
+        game.update(dt, hub.latest);
+      } else {
+        game.idle(dt);
+      }
+      renderer.render(game.scene, game.camera);
     }
-    renderer.render(game.scene, game.camera);
     // Adaptive quality: drop resolution a step at a time while the device struggles.
     frames++;
     if (now - fpsSince > 3000) {
@@ -1345,4 +1496,4 @@ if (params.has("preview")) {
   setInterval(() => checkin(false), 20 * 60 * 1000);
   showStart();
 }
-window.__movecam = { state, hub, audio, GAMES, party };
+window.__movecam = { state, hub, audio, GAMES, party, duo };

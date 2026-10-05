@@ -88,6 +88,7 @@ export class BrowserCamera {
           result = null;
         }
         this.hub.processPose(this.pickPose(result), false, now / 1000);
+        this.hub.processPeople(this.people, now / 1000);
       }
       if (v.requestVideoFrameCallback) v.requestVideoFrameCallback(tick);
       else requestAnimationFrame(tick);
@@ -99,6 +100,7 @@ export class BrowserCamera {
   pickPose(result) {
     const people = result?.landmarks ?? [];
     let best = null;
+    const found = [];
     for (const lm of people) {
       const joints = {};
       for (const [name, i] of Object.entries(MP)) {
@@ -115,6 +117,7 @@ export class BrowserCamera {
       if (Object.keys(joints).length < 4) continue;
       const pose = new BodyPose(joints, this.aspect);
       let score = pose.torsoLength ?? 0.01;
+      found.push({ pose, size: score });
       const center = pose.neckPoint ?? Object.values(joints)[0];
       if (this.lastCenter) {
         const moved = Math.hypot((center.x - this.lastCenter.x) * pose.aspect, center.y - this.lastCenter.y);
@@ -123,6 +126,7 @@ export class BrowserCamera {
       if (!best || score > best.score) best = { pose, score, center };
     }
     this.lastCenter = best?.center ?? null;
+    this.people = found.sort((a, b) => b.size - a.size).slice(0, 2).map((f) => f.pose);
     return best?.pose ?? null;
   }
 
@@ -138,11 +142,18 @@ export function installNativeBridge(hub) {
   window.MoveCamNative.pushPose = (frame) => {
     if (!frame || !frame.joints) {
       hub.processPose(null, !!frame?.thumbsUp, frame?.t ?? performance.now() / 1000);
+      hub.processPeople([], frame?.t ?? performance.now() / 1000);
       return;
     }
     const joints = {};
     for (const [name, xy] of Object.entries(frame.joints)) joints[name] = { x: xy[0], y: xy[1] };
     hub.processPose(new BodyPose(joints, frame.aspect || 16 / 9), !!frame.thumbsUp, frame.t);
+    const people = (frame.people ?? []).map((p) => {
+      const j = {};
+      for (const [name, xy] of Object.entries(p)) j[name] = { x: xy[0], y: xy[1] };
+      return new BodyPose(j, frame.aspect || 16 / 9);
+    });
+    hub.processPeople(people, frame.t);
   };
 }
 

@@ -21,6 +21,8 @@ final class PoseDetector {
     struct Result {
         var pose: BodyPose?
         var thumbsUp: Bool
+        /// Up to two people, left to right on screen (for two players on one camera).
+        var people: [BodyPose] = []
     }
 
     func detect(pixelBuffer: CVPixelBuffer, detectHands: Bool) -> Result {
@@ -40,6 +42,7 @@ final class PoseDetector {
         // Several people in view: keep following the same player (closest to where
         // they were last frame) unless someone else is much bigger/closer.
         var best: (pose: BodyPose, raw: [Joint: CGPoint], score: CGFloat, center: CGPoint)?
+        var everyone: [(pose: BodyPose, size: CGFloat, center: CGPoint)] = []
         for observation in observations {
             guard let points = try? observation.recognizedPoints(.all) else { continue }
             var joints: [Joint: CGPoint] = [:]
@@ -56,6 +59,7 @@ final class PoseDetector {
                 return 0.01
             }()
             let center = pose.neckPoint ?? joints.values.first!
+            everyone.append((pose, size, center))
             var score = size
             if let previous = lastCenter {
                 let moved = hypot((center.x - previous.x) * aspect, center.y - previous.y)
@@ -66,13 +70,15 @@ final class PoseDetector {
             }
         }
         lastCenter = best?.center
+        // The two biggest (closest) people, ordered left to right.
+        let people = everyone.sorted { $0.size > $1.size }.prefix(2).sorted { $0.center.x < $1.center.x }.map(\.pose)
         guard let chosen = best else { return Result(pose: nil, thumbsUp: false) }
 
         var thumbsUp = false
         if detectHands {
             thumbsUp = detectThumbsUp(handler: handler, raw: chosen.raw, width: width, height: height)
         }
-        return Result(pose: chosen.pose, thumbsUp: thumbsUp)
+        return Result(pose: chosen.pose, thumbsUp: thumbsUp, people: people)
     }
 
     // MARK: - Hands
