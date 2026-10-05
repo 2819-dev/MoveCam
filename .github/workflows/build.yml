@@ -1,0 +1,98 @@
+name: Build
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build web game
+        working-directory: web
+        run: |
+          npm ci
+          npm test
+          npm run build
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project MoveCam.xcodeproj \
+            -scheme MoveCam \
+            -configuration Release \
+            -derivedDataPath build \
+            -destination 'generic/platform=macOS' \
+            CODE_SIGN_IDENTITY=- \
+            build 2>&1 | grep -E "error:|warning: unre|\*\* BUILD" || true
+          test -d build/Build/Products/Release/MoveCam.app
+
+      - name: Motion tracking tests
+        run: |
+          set +e
+          xcodebuild test \
+            -project MoveCam.xcodeproj \
+            -scheme MoveCamTests \
+            -destination 'platform=macOS' \
+            -derivedDataPath build-tests \
+            CODE_SIGN_IDENTITY=- > test.log 2>&1
+          code=$?
+          grep -E "Test Case .*(passed|failed)|error:|\*\* TEST" test.log
+          [ $code = 0 ] || tail -60 test.log
+          exit $code
+
+      - name: Render game previews
+        run: |
+          build/Build/Products/Release/MoveCam.app/Contents/MacOS/MoveCam --render-previews "$PWD/previews" &
+          PID=$!
+          for i in $(seq 1 90); do kill -0 $PID 2>/dev/null || break; sleep 1; done
+          kill $PID 2>/dev/null || true
+          ls -la previews || true
+
+      - name: Upload previews
+        uses: actions/upload-artifact@v4
+        with:
+          name: game-previews
+          path: previews
+          if-no-files-found: warn
+
+
+
+      - name: Self-update test
+        run: |
+          # Install this build (version 1.0.0) somewhere writable, let it update itself,
+          # and check the app on disk becomes the latest GitHub release.
+          LATEST=$(curl -s -H "Authorization: Bearer ${{ github.token }}" https://api.github.com/repos/${{ github.repository }}/releases/latest | python3 -c 'import sys,json; print(json.load(sys.stdin).get("tag_name","").lstrip("v"))')
+          if [ -z "$LATEST" ]; then echo "No release yet; skipping"; exit 0; fi
+          APPS="$RUNNER_TEMP/Apps"; mkdir -p "$APPS"
+          cp -R build/Build/Products/Release/MoveCam.app "$APPS/"
+          "$APPS/MoveCam.app/Contents/MacOS/MoveCam" --install-update-now &
+          for i in $(seq 1 120); do
+            V=$(defaults read "$APPS/MoveCam.app/Contents/Info.plist" CFBundleShortVersionString 2>/dev/null || true)
+            [ "$V" = "$LATEST" ] && break
+            sleep 1
+          done
+          cat "${TMPDIR}movecam-update.log" 2>/dev/null || true
+          echo "Installed version: $V (latest release: $LATEST)"
+          sleep 5
+          pgrep -fl "$APPS/MoveCam.app" && echo "Relaunched OK" || echo "::warning::Updated app was not relaunched"
+          pkill -f "$APPS/MoveCam.app" || true
+          [ "$V" = "$LATEST" ]

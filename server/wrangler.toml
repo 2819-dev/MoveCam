@@ -1,0 +1,18 @@
+name = "movecam"
+pages_build_output_dir = "public"
+compatibility_date = "2026-09-01"
+compatibility_flags = ["nodejs_compat"]
+
+[[kv_namespaces]]
+binding = "DB"
+id = "2de7a41eb409407c8c4ba585b91c9470"
+
+# Email sending and multiplayer rooms live in the movecam-backend Worker (server/backend).
+[[services]]
+binding = "BACKEND"
+service = "movecam-backend"
+
+[[durable_objects.bindings]]
+name = "PARTY"
+class_name = "Party"
+script_name = "movecam-backend"

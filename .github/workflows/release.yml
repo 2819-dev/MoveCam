@@ -1,0 +1,82 @@
+name: Release
+
+# Every push to main publishes a new release with MoveCam.dmg — nothing to set up.
+# The version is <VERSION file>.<run number>, e.g. 1.0.17.
+# Players' apps show an Update button when a newer release is out.
+on:
+  push:
+    branches: [main]
+    paths-ignore: ["**.md", "entitlements.json"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Work out version
+        id: version
+        run: |
+          BASE=$(tr -d '[:space:]' < VERSION)
+          VERSION="$BASE.${{ github.run_number }}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Releasing MoveCam $VERSION"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build web game
+        working-directory: web
+        run: |
+          npm ci
+          npm test
+          npm run build
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Build app
+        run: |
+          set -o pipefail
+          xcodegen generate
+          xcodebuild \
+            -project MoveCam.xcodeproj \
+            -scheme MoveCam \
+            -configuration Release \
+            -derivedDataPath build \
+            -destination 'generic/platform=macOS' \
+            MARKETING_VERSION="${{ steps.version.outputs.version }}" \
+            CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
+            CODE_SIGN_IDENTITY=- \
+            build 2>&1 | grep -E "error:|\*\* BUILD" || true
+          test -d build/Build/Products/Release/MoveCam.app
+
+      - name: Make DMG
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          mkdir -p dist dmg
+          cp -R build/Build/Products/Release/MoveCam.app dmg/
+          codesign --force --deep --sign - dmg/MoveCam.app
+          ln -s /Applications dmg/Applications
+          hdiutil create -volname "MoveCam" -srcfolder dmg -ov -format UDZO dist/MoveCam.dmg
+          # The in-app updater downloads this zip.
+          ditto -c -k --sequesterRsrc --keepParent dmg/MoveCam.app "dist/MoveCam-$VERSION.zip"
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ steps.version.outputs.tag }}" dist/MoveCam.dmg dist/MoveCam-*.zip \
+            --title "MoveCam ${{ steps.version.outputs.version }}" \
+            --generate-notes \
+            --target "$GITHUB_SHA"

@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Download MoveCam</title>
+<link rel="icon" href="/play/icons/icon-192.png"><link rel="apple-touch-icon" href="/play/icons/icon-180.png">
+<link rel="stylesheet" href="/site.css">
+</head><body>
+<nav class="wrap"><a class="logo" href="/"><img src="/play/icons/icon-180.png" alt="">MoveCam</a><div class="links"><a href="/#games">Games</a><a href="/#how">How it works</a><a href="/download/">Download</a></div></nav>
+<section style="border-top:0"><div class="wrap">
+  <h2>Get MoveCam</h2>
+  <p class="lead">Free to download. Updates install themselves.</p>
+  <div class="platforms">
+    <div class="platform" id="mac">
+      <h3>Mac</h3>
+      <p>The native app uses Apple's body tracking for the most accurate controls. macOS 14 or later.</p>
+      <ol>
+        <li>Download <b>MoveCam.dmg</b> and drag MoveCam to <b>Applications</b>.</li>
+        <li>The first time, right-click MoveCam → <b>Open</b> → <b>Open</b>. (On macOS 15: System Settings → Privacy &amp; Security → <b>Open Anyway</b>.)</li>
+        <li>Allow camera access when asked.</li>
+      </ol>
+      <a class="btn primary" href="https://github.com/2819-dev/MoveCam/releases/latest/download/MoveCam.dmg">Download for Mac</a>
+    </div>
+    <div class="platform" id="ipad">
+      <h3>iPad</h3>
+      <p>MoveCam runs as a full-screen app from your Home Screen — no App Store needed. iPadOS 16.4 or later.</p>
+      <ol>
+        <li>On your iPad, open <b>movecam</b> in <b>Safari</b> and tap <b>Play now</b>.</li>
+        <li>Tap the <b>Share</b> button <kbd>⬆︎</kbd> then <b>Add to Home Screen</b> → <b>Add</b>.</li>
+        <li>Open MoveCam from your Home Screen, tap <b>Start</b> and allow the camera.</li>
+        <li>Stand the iPad up in landscape (a case stand works great) and step back.</li>
+      </ol>
+      <a class="btn primary" href="/play/">Open MoveCam</a>
+    </div>
+  </div>
+  <p style="color:var(--secondary);margin-top:28px">Also works in Chrome, Edge and Safari on any computer with a webcam: <a href="/play/">play in your browser</a>.</p>
+</div></section>
+<footer><div class="wrap">MoveCam · Body tracking runs on your device; video never leaves it. · <a href="https://github.com/2819-dev/MoveCam">GitHub</a></div></footer>
+<script>
+  // Point iPad visitors straight at the iPad steps.
+  if (/iPad|Macintosh/.test(navigator.userAgent) && "ontouchend" in document) document.getElementById("ipad").scrollIntoView();
+</script>
+</body></html>
